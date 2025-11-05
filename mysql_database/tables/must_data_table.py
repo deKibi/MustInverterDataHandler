@@ -146,7 +146,7 @@ class MustDataTable:
         values = tuple(filtered_data.values())
 
         # Executing query
-        with self._mysql_con_handler.get_poll_connection() as connection:
+        with self._connection_handler.get_poll_connection() as connection:
             cursor = connection.cursor()
             cursor.execute(sql, values)
             connection.commit()
