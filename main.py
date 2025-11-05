@@ -1,6 +1,7 @@
 # main.py
 
 # Standard Libraries
+from typing import Optional
 import time  # Import the time module for sleep
 import os
 from routines import *
@@ -40,11 +41,7 @@ class MustInverterDataHandler:
         self._command_string_5 = f"{inverter_id} 03 4E 85 00 2C"
         self._command_string_6 = f"{inverter_id} 03 62 71 00 4F"
 
-    def read_data(self) -> None:
-        """
-        Reads the data from inverter.
-        :return:
-        """
+    def get_data(self) -> Optional[dict]:
         try:
             # Calculate the CRC value for the command
             command_bytes_1 = generate_crc(self._command_string_1)
@@ -92,19 +89,30 @@ class MustInverterDataHandler:
             ser.close()
 
             # Example usage:
-            merged_result = merge_json(responses)
-            print(merged_result)
+            merged_result: dict = merge_json(responses)
+            return merged_result
 
         except Exception as e:
-            print("Error:", str(e))
+            print("Error while getting inverter's data:", str(e))
 
 
 def main():
     # 1. Create instance of class MustInverterDataHandler
     must_inverter_data_handler = MustInverterDataHandler()
 
-    # 2. Print inverter data (temp test solution)
-    must_inverter_data_handler.read_data()
+    # 2. Get inverter data (temp test solution)
+    must_data = must_inverter_data_handler.get_data()
+
+    # 3. Example usage:
+    # print(must_data)
+    get_data_delay = 10 # seconds
+    while True:
+        must_data = must_inverter_data_handler.get_data()
+        print(must_data)
+        print(f"\nSleeping for {get_data_delay} seconds...")
+        print(f"\nNew data block:\n")
+        time.sleep(get_data_delay)
+
 
 if __name__ == '__main__':
     main()
