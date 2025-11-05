@@ -38,84 +38,94 @@ MustInverterDataHandler is Python application designed for interacting with Must
 - `serial_port`: Specify the path to the serial port where your Must Inverter PH1800 is connected.
 - `command_config`: Enable or disable specific data retrieval commands based on your requirements.
 
+### .env 
+```
+MUST_PORT=COM3
+```
+
+
 ### Usage
 
 Run the application:
 
 - `python main.py`
 
-### Configuration (.env)
-```
-MUST_PORT=3
-```
 
-### Output Example
+### Output Example (2025-11-05)
 
 ```
 {
-    "ChargerWorkstate": 2,
-    "MpptState": 2,
-    "ChargingState": 1,
-    "PvVoltage": "78.00",
-    "BatteryVoltage": "26.90",
-    "ChargerCurrent": "20.20",
-    "ChargerPower": 539,
-    "RadiatorTemperature": 35,
+    "ChargerWorkstate": 3,
+    "MpptState": 0,
+    "ChargingState": 0,
+    "PvVoltage": "0.00",
+    "BatteryVoltage": "27.50",
+    "ChargerCurrent": "0.00",
+    "ChargerPower": 0,
+    "RadiatorTemperature": 22,
     "ExternalTemperature": 0,
-    "BatteryRelay": 1,
-    "PvRelay": 1,
-    "ErrorMessage": 0,
+    "BatteryRelay": 0,
+    "PvRelay": 0,
+    "ErrorMessage": 32,
     "WarningMessage": 0,
     "BattVolGrade": 24,
     "RatedCurrent": "60.00",
-    "AccumulatedPower": "100.70",
+    "AccumulatedPower": "191.90",
     "AccumulatedTime": "00:00:00",
-    "WorkState": 2,
+    "WorkState": 4,
     "AcVoltageGrade": 230,
-    "RatedPower": 3000,
-    "InverterBatteryVoltage": "27.30",
-    "InverterVoltage": 229.9,
-    "GridVoltage": "234.70",
-    "BusVoltage": "423.20",
-    "ControlCurrent": "1.70",
-    "InverterCurrent": "1.50",
-    "GridCurrent": "0.00",
-    "LoadCurrent": "1.50",
-    "PInverter": 37,
-    "PGrid": 0,
-    "PLoad": 37,
-    "LoadPercent": 1,
-    "SInverter": 396,
-    "SGrid": 0,
-    "Sload": 352,
-    "Qinverter": 394,
-    "Qgrid": 0,
-    "Qload": 394,
-    "InverterFrequency": 50.0,
-    "GridFrequency": "49.97",
+    "RatedPower": 3200,
+    "InverterBatteryVoltage": "27.40",
+    "InverterVoltage": "228.90",
+    "GridVoltage": "230.60",
+    "BusVoltage": "434.30",
+    "ControlCurrent": "0.00",
+    "InverterCurrent": "0.00",
+    "GridCurrent": "1.00",
+    "LoadCurrent": "0.80",
+    "PInverter": -40,
+    "PGrid": -165,
+    "PLoad": 127,
+    "LoadPercent": 6,
+    "SInverter": 0,
+    "SGrid": 238,
+    "Sload": 127,
+    "Qinverter": 0,
+    "Qgrid": 164,
+    "Qload": 153,
+    "InverterFrequency": "50.01",
+    "GridFrequency": "50.01",
     "InverterMaxNumber": "0000",
     "CombineType": "0000",
     "InverterNumber": "0000",
-    "AcRadiatorTemperature": 31,
-    "TransformerTemperature": 0,
+    "AcRadiatorTemperature": 43,
+    "TransformerTemperature": 56,
     "DcRadiatorTemperature": 0,
-    "InverterRelayState": 1,
-    "GridRelayState": 0,
+    "InverterRelayState": 0,
+    "GridRelayState": 1,
     "LoadRelayState": 1,
     "N_LineRelayState": 0,
-    "DCRelayState": 1,
+    "DCRelayState": 0,
     "EarthRelayState": 0,
-    "AccumulatedChargerPower": "0.20",
-    "AccumulatedDischargerPower": "51.40",
-    "AccumulatedBuyPower": "0.00",
+    "AccumulatedChargerPower": "0.00",
+    "AccumulatedDischargerPower": "413.80",
+    "AccumulatedBuyPower": "681.70",
     "AccumulatedSellPower": "0.00",
-    "AccumulatedLoadPower": "53.00",
-    "AccumulatedSelf_usePower": "51.20",
+    "AccumulatedLoadPower": "604.10",
+    "AccumulatedSelf_usePower": "419.30",
     "AccumulatedPV_sellPower": "0.00",
-    "AccumulatedGrid_chargerPower": "0.00",
-    "BattPower": -449,
-    "BattCurrent": -16
+    "AccumulatedGrid_chargerPower": "297.90",
+    "SerialNumber": "FFFFFFFF",
+    "HardwareVersion": "1.01.01",
+    "SoftwareVersion": "2.25.34",
+    "BattPower": -10,
+    "BattCurrent": -5,
+    "BattVoltageGrade": 24,
+    "RatedPowerW": 3200,
+    "CommunicationProtocolEdition": "1.04.14",
+    "ArrowFlag": 622
 }
+
 ```
 
 ## License
