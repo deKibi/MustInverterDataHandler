@@ -44,6 +44,11 @@ Run the application:
 
 - `python main.py`
 
+### Configuration (.env)
+```
+MUST_PORT=3
+```
+
 ### Output Example
 
 ```
