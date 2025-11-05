@@ -10,6 +10,10 @@ from mapper import *
 # Third-party Libraries
 from dotenv import load_dotenv
 
+# Custom Modules
+from mysql_database import MysqlConnectionHandler
+from mysql_database.tables import MustDataTable
+
 
 class MustInverterDataHandler:
     def __init__(self):
@@ -97,22 +101,43 @@ class MustInverterDataHandler:
 
 
 def main():
+    load_dotenv()  # load vars from .env into our environment
+
     # 1. Create instance of class MustInverterDataHandler
     must_inverter_data_handler = MustInverterDataHandler()
 
-    # 2. Get inverter data (temp test solution)
-    must_data = must_inverter_data_handler.get_data()
+    # 2. Initialize MySQL database connection
+    mysql_connection_handler = MysqlConnectionHandler()
+    mysql_connection_handler.initialize_connection(
+        db_host=os.getenv("MYSQL_HOST", "localhost"),
+        db_name=os.getenv("MYSQL_DATABASE", "must_data"),
+        db_user=os.getenv("MYSQL_USER", "root"),
+        db_password=os.getenv("MYSQL_PASSWORD", ""),
+        pool_name="must_python_worker",
+        pool_size=2
+    )
+    must_data_table = MustDataTable(connection_handler=mysql_connection_handler)
+    must_data_table.initialize_table()
 
-    # 3. Example usage:
-    # print(must_data)
-    get_data_delay = 10 # seconds
+    # 3. Read & save data
+    get_inverter_data_delay = os.getenv("DATA_GATHER_INTERVAL_SECONDS", default=60) # seconds
+    if get_inverter_data_delay < 10:
+        get_inverter_data_delay = 10  # min interval 10 seconds
+    elif get_inverter_data_delay > 3600:
+        get_inverter_data_delay = 3600  # max internal 1 hour
     while True:
+        # 1. Get data
         must_data = must_inverter_data_handler.get_data()
-        print(must_data)
-        print(f"\nSleeping for {get_data_delay} seconds...")
-        print(f"\nNew data block:\n")
-        time.sleep(get_data_delay)
 
+        # 2. Check & insert data
+        if must_data and len(must_data) > 2:
+            must_data_table.insert_data(data=must_data)
+            print("Data inserted into the database.")
+        else:
+            print("Unable to get data from the inverter")
+
+        print(f"\nSleeping for {get_inverter_data_delay} seconds...")
+        time.sleep(get_inverter_data_delay)
 
 if __name__ == '__main__':
     main()
