@@ -92,8 +92,9 @@ class MustInverterDataHandler:
             # Close the serial connection when done
             ser.close()
 
-            # Example usage:
-            merged_result: dict = merge_json(responses)
+            # Gather all data and convert it to dict
+            merged_result_str: str = merge_json(responses)
+            merged_result: dict = json.loads(merged_result_str)
             return merged_result
 
         except Exception as e:
