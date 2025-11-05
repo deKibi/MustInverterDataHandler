@@ -101,12 +101,14 @@ class MustInverterDataHandler:
 
 
 def main():
+    print("Initializing project.")
     load_dotenv()  # load vars from .env into our environment
 
     # 1. Create instance of class MustInverterDataHandler
     must_inverter_data_handler = MustInverterDataHandler()
 
     # 2. Initialize MySQL database connection
+    print("Connecting to MySQL, it may take some time, please wait...")
     mysql_connection_handler = MysqlConnectionHandler()
     mysql_connection_handler.initialize_connection(
         db_host=os.getenv("MYSQL_HOST", "localhost"),
@@ -116,10 +118,12 @@ def main():
         pool_name="must_python_worker",
         pool_size=2
     )
+    print("Initializing MySQL tables, it may take some time, please wait...")
     must_data_table = MustDataTable(connection_handler=mysql_connection_handler)
     must_data_table.initialize_table()
 
     # 3. Read & save data
+    print("Getting inverter's data...")
     get_inverter_data_delay = os.getenv("DATA_GATHER_INTERVAL_SECONDS", default=60) # seconds
     if get_inverter_data_delay < 10:
         get_inverter_data_delay = 10  # min interval 10 seconds
@@ -128,13 +132,14 @@ def main():
     while True:
         # 1. Get data
         must_data = must_inverter_data_handler.get_data()
+        print("Inverter's data received:", must_data)
 
         # 2. Check & insert data
         if must_data and len(must_data) > 2:
             must_data_table.insert_data(data=must_data)
             print("Data inserted into the database.")
         else:
-            print("Unable to get data from the inverter")
+            print("Unable to get data from the inverter.")
 
         print(f"\nSleeping for {get_inverter_data_delay} seconds...")
         time.sleep(get_inverter_data_delay)

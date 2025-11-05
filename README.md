@@ -44,10 +44,10 @@ MustInverterDataHandler is Python application designed for interacting with Must
 MUST_PORT=COM3
 
 # MYSQL DATABASE
-DB_HOST='db_ip'
-DB_NAME='db_name'
-DB_USER='db_user'
-DB_USER_PASSWORD='user_password'
+MYSQL_HOST='db_ip'
+MYSQL_DATABASE='db_name'
+MYSQL_USER='db_user'
+MYSQL_PASSWORD='user_password'
 ```
 ```
 # (Optional) DATA_GATHER_INTERVAL_SECONDS
