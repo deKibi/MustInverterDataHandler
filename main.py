@@ -30,7 +30,7 @@ class MustInverterDataHandler:
             "command_2_enabled": False,
             "command_3_enabled": True,  # good data
             "command_4_enabled": False,
-            "command_5_enabled": False,
+            "command_5_enabled": True,
             "command_6_enabled": True  # good data
         }
 
@@ -95,6 +95,10 @@ class MustInverterDataHandler:
             # Gather all data and convert it to dict
             merged_result_str: str = merge_json(responses)
             merged_result: dict = json.loads(merged_result_str)
+
+            # === Getting inverter energy mode (Bypass, SBU, etc.) === testing!!!
+            print("EnergyUseMode RAW:", merged_result.get("EnergyUseMode"))
+
             return merged_result
 
         except Exception as e:
