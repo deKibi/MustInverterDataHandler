@@ -20,6 +20,7 @@ class MustDataTable:
             f"MpptState INT, "
             f"ChargingState INT, "
             f"WorkState INT, "
+            f"EnergyUseMode INT, "
     
             # MAIN VOLTAGE AND CURRENCY
             f"PvVoltage FLOAT, "
@@ -113,7 +114,7 @@ class MustDataTable:
 
         # Table fields
         columns = [
-            "ChargerWorkstate", "MpptState", "ChargingState", "WorkState",
+            "ChargerWorkstate", "MpptState", "ChargingState", "WorkState", "EnergyUseMode",
             "PvVoltage", "BatteryVoltage", "InverterBatteryVoltage", "InverterVoltage",
             "GridVoltage", "BusVoltage", "ChargerCurrent", "InverterCurrent",
             "GridCurrent", "LoadCurrent", "ChargerPower", "PInverter", "PGrid",

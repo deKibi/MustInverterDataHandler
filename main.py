@@ -81,6 +81,7 @@ class MustInverterDataHandler:
                 responses.append(convert_partArr4_to_json(response_4))
 
             if self._command_config["command_5_enabled"]:
+                # === Getting EnergyUseMode  ===
                 response_5 = get_part_arr(ser, command_bytes_5, 44, 20)
                 time.sleep(0.03)
                 responses.append(convert_partArr5_to_json(response_5))
@@ -95,9 +96,6 @@ class MustInverterDataHandler:
             # Gather all data and convert it to dict
             merged_result_str: str = merge_json(responses)
             merged_result: dict = json.loads(merged_result_str)
-
-            # === Getting inverter energy mode (Bypass, SBU, etc.) === testing!!!
-            print("EnergyUseMode RAW:", merged_result.get("EnergyUseMode"))
 
             return merged_result
 
