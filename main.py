@@ -27,7 +27,7 @@ class MustInverterDataHandler:
         # This configuration can slow down the execution
         self._command_config = {
             "command_1_enabled": False,  # not really needed/implemented
-            "command_2_enabled": True,
+            "command_2_enabled": False,
             "command_3_enabled": True,  # good data
             "command_4_enabled": False,
             "command_5_enabled": True,
@@ -96,10 +96,6 @@ class MustInverterDataHandler:
             # Gather all data and convert it to dict
             merged_result_str: str = merge_json(responses)
             merged_result: dict = json.loads(merged_result_str)
-
-            # Debug charger current
-            print("CMD2 MaxChargerCurrent =", merged_result.get("MaxChargerCurrent"))
-            print("CMD2 AbsorbChargerCurrent =", merged_result.get("AbsorbChargerCurrent"))
 
             return merged_result
 
