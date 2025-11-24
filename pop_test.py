@@ -56,8 +56,12 @@ def send_pop_command(port: str, mode: int):
         print("Error sending POP command:", e)
 
 if __name__ == '__main__':
-    # === ! ATTENTION ! ====
-    # --- DON NOT RUN WHEN MAIN ACTIVE, STOP main.py, then run ---
+    # === DEBUG ===
+    print("Sending POP command in 3 seconds!")
+    time.sleep(3)
+
     load_dotenv()
-    must_port = os.getenv("MUST_PORT", "/dev/ttyUSB0")
-    send_pop_command(port=must_port, mode=1)  # SBU
+    MUST_PORT = os.getenv("MUST_PORT", "/dev/ttyUSB0")
+    send_pop_command(port=MUST_PORT, mode=1)  # SBU
+
+    print(f"POP command on port {MUST_PORT} sent.")
