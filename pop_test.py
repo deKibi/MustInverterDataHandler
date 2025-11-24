@@ -55,13 +55,42 @@ def send_pop_command(port: str, mode: int):
     except Exception as e:
         print("Error sending POP command:", e)
 
+
+def send_pop_ascii(port: str, mode: int):
+    if mode not in [1,2,3,4]:
+        print("Mode must be 1-4")
+        return
+
+    cmd = f"POP0{mode}\r"     # ASCII command
+    print("Sending:", repr(cmd))
+
+    try:
+        ser = serial.Serial(port, baudrate=2400, timeout=1)  # ❗ тут 2400 для ASCII, НЕ 19200
+        ser.write(cmd.encode('ascii'))
+
+        time.sleep(0.2)
+        resp = ser.read(ser.in_waiting or 1)
+        ser.close()
+
+        print("Response:", resp)
+    except Exception as e:
+        print("Error:", e)
+
+
+
 if __name__ == '__main__':
     # === DEBUG ===
     print("Sending POP command in 3 seconds!")
     time.sleep(3)
 
+    # Start
     load_dotenv()
     MUST_PORT = os.getenv("MUST_PORT", "/dev/ttyUSB0")
-    send_pop_command(port=MUST_PORT, mode=1)  # SBU
+
+    # Try №1. Send POP command (fail)
+    # send_pop_command(port=MUST_PORT, mode=1)  # SBU
+
+    # Try №2. Send POP ASCII command
+    send_pop_ascii(port="COM3", mode=1)  # SBU
 
     print(f"POP command on port {MUST_PORT} sent.")
