@@ -35,6 +35,12 @@ def _handle_energy_mode_control(must_data: dict[str, Any] | None) -> bool:
         print("All automatic energy mode control features are disabled, exiting.")
         return False
 
+    if ENABLE_AUTO_SWITCH:
+        print("Time-based energy mode auto-switch is enabled.")
+
+    if ENABLE_GRID_OUTAGE_AUTO_SWITCH:
+        print("Grid outage energy mode auto-switch is enabled.")
+
     if must_data is None:
         print("must_data is None - cannot control energy mode.")
         return False
