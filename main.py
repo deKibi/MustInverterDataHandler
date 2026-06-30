@@ -1,8 +1,7 @@
 # main.py
 
 # Standard Libraries
-from typing import Optional
-import time  # Import the time module for sleep
+from typing import Optional, Final
 import os
 from routines import *
 from mapper import *
@@ -13,7 +12,7 @@ from dotenv import load_dotenv
 # Custom Modules
 from mysql_database import MysqlConnectionHandler
 from mysql_database.tables import MustDataTable
-from config import MUST_PORT
+from config import MUST_PORT, DATA_GATHER_INTERVAL_SECONDS
 from energy_mode_control.energy_mode_controller import (
     handle_energy_mode_control,
 )
@@ -131,11 +130,8 @@ def main():
 
     # 3. Read & save data
     print("Getting inverter's data...")
-    get_inverter_data_delay = os.getenv("DATA_GATHER_INTERVAL_SECONDS", default=60) # seconds
-    if get_inverter_data_delay < 10:
-        get_inverter_data_delay = 10  # min interval 10 seconds
-    elif get_inverter_data_delay > 3600:
-        get_inverter_data_delay = 3600  # max internal 1 hour
+    print(f"Data gathering interval is set to: {DATA_GATHER_INTERVAL_SECONDS} seconds.")
+
     while True:
         # 1. Get data
         must_data = must_inverter_data_handler.get_data()
@@ -151,8 +147,8 @@ def main():
         else:
             print("Unable to get data from the inverter.")
 
-        print(f"\nSleeping for {get_inverter_data_delay} seconds...")
-        time.sleep(get_inverter_data_delay)
+        print(f"\nSleeping for {DATA_GATHER_INTERVAL_SECONDS} seconds...")
+        time.sleep(DATA_GATHER_INTERVAL_SECONDS)
 
 if __name__ == '__main__':
     main()

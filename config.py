@@ -48,6 +48,51 @@ def get_env_bool(variable_name: str, default: bool = False) -> bool:
     )
 
 
+def get_env_int(
+    variable_name: str,
+    default: int,
+    min_value: int | None = None,
+    max_value: int | None = None,
+) -> int:
+    """
+    Read an integer environment variable.
+
+    Returns the default value if the variable is missing
+    or contains an invalid value.
+
+    Optionally limits the value to a minimum and maximum.
+    """
+    raw_value = os.getenv(variable_name)
+
+    if raw_value is None:
+        return default
+
+    try:
+        value = int(raw_value.strip())
+    except (TypeError, ValueError):
+        print(
+            f"Invalid value for {variable_name}: {raw_value!r}. "
+            f"Using default value: {default}."
+        )
+        return default
+
+    if min_value is not None and value < min_value:
+        print(
+            f"{variable_name} is below the minimum value "
+            f"of {min_value}. Using {min_value}."
+        )
+        return min_value
+
+    if max_value is not None and value > max_value:
+        print(
+            f"{variable_name} is above the maximum value "
+            f"of {max_value}. Using {max_value}."
+        )
+        return max_value
+
+    return value
+
+
 def get_env_time(variable_name: str, default: str) -> time:
     """
     Read an environment variable in HH:MM format and convert it to time.
@@ -84,6 +129,13 @@ def get_env_energy_mode(
 
 
 MUST_PORT: Final[str] = os.getenv("MUST_PORT", "COM3")
+
+DATA_GATHER_INTERVAL_SECONDS: Final[int] = get_env_int(
+    variable_name="DATA_GATHER_INTERVAL_SECONDS",
+    default=60,
+    min_value=10,
+    max_value=3600,
+)
 
 ENABLE_AUTO_SWITCH: Final[bool] = get_env_bool(
     variable_name="ENABLE_AUTO_SWITCH",
