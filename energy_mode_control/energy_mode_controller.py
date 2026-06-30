@@ -12,14 +12,14 @@ from config import (
     GRID_OUTAGE_TARGET_MODE,
     EnergyMode
 )
-from time_utils import is_time_reached
+from energy_mode_control.time_utils import is_time_reached
 from energy_mode_control.energy_mode_switcher import (
     switch_energy_mode,
 )
 
 
 # Grid availability
-GRID_OUTAGE_VOLTAGE_THRESHOLD: Final[float] = 1.0
+GRID_OUTAGE_VOLTAGE_THRESHOLD: Final[float] = 10.0
 
 
 def handle_energy_mode_control(must_data: dict[str, Any] | None) -> bool:
