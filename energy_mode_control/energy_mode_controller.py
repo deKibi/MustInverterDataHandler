@@ -13,6 +13,9 @@ from config import (
     EnergyMode
 )
 from time_utils import is_time_reached
+from energy_mode_control.energy_mode_switcher import (
+    switch_energy_mode,
+)
 
 
 # Grid availability
@@ -106,8 +109,7 @@ def _handle_energy_mode_control(must_data: dict[str, Any] | None) -> bool:
     )
 
     # The real inverter command will be added here:
-    #
-    # switch_energy_mode(target_mode=target_mode)
-    # return True
-
+    switch_energy_mode(
+        target_mode=target_mode,
+    )
     return True
