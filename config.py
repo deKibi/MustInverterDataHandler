@@ -100,6 +100,22 @@ AUTO_SWITCH_TARGET_MODE: Final[EnergyMode] = get_env_energy_mode(
     default=EnergyMode.SUB,
 )
 
+# Grid outage automatic mode switch
+ENABLE_GRID_OUTAGE_AUTO_SWITCH: Final[bool] = (
+    get_env_bool(
+        variable_name="ENABLE_GRID_OUTAGE_AUTO_SWITCH",
+        default=False,
+    )
+)
+
+GRID_OUTAGE_TARGET_MODE: Final[EnergyMode] = (
+    get_env_energy_mode(
+        variable_name="GRID_OUTAGE_TARGET_MODE",
+        default=EnergyMode.SUB,
+    )
+)
+
+
 if __name__ == '__main__':
     print("debugging config.py")
 
@@ -120,3 +136,14 @@ if __name__ == '__main__':
     auto_switch_target_mode_code = AUTO_SWITCH_TARGET_MODE.value
     print("Auto switch target mode code:", auto_switch_target_mode_code)
     print("Object Type:", type(auto_switch_target_mode_code))
+
+    grid_outage_auto_switch = ENABLE_GRID_OUTAGE_AUTO_SWITCH
+    print("Grid outage auto switch:", grid_outage_auto_switch)
+    print("Object Type:", type(grid_outage_auto_switch))
+
+    grid_outage_target_mode_name = GRID_OUTAGE_TARGET_MODE.name
+    grid_outage_target_mode_code = GRID_OUTAGE_TARGET_MODE.value
+    print("Grid outage target mode:", grid_outage_target_mode_name)
+    print("Object Type:", type(grid_outage_target_mode_name))
+    print("Grid outage target mode code:", grid_outage_target_mode_code)
+    print("Object Type:", type(grid_outage_target_mode_code))
