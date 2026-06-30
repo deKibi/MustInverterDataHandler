@@ -13,6 +13,10 @@ from dotenv import load_dotenv
 # Custom Modules
 from mysql_database import MysqlConnectionHandler
 from mysql_database.tables import MustDataTable
+from config import MUST_PORT
+from energy_mode_control.energy_mode_controller import (
+    handle_energy_mode_control,
+)
 
 
 class MustInverterDataHandler:
@@ -20,8 +24,8 @@ class MustInverterDataHandler:
         # Define the serial port (change the port name as needed)
         # (Optional) Get the port from .env
         load_dotenv()  # Load vars from .env into our environment
-        # serial_port = "/dev/ttyUSB0"
-        self._serial_port = os.getenv("MUST_PORT", "/dev/ttyUSB0")  # default, if not found
+        # serial_port (for Linux primarily) = "/dev/ttyUSB0"
+        self._serial_port = MUST_PORT
 
         # Define the configuration for command strings # Set to True or False as needed
         # This configuration can slow down the execution
@@ -141,6 +145,9 @@ def main():
         if must_data and len(must_data) > 2:
             must_data_table.insert_data(data=must_data)
             print("Data inserted into the database.")
+
+            # 3. Handle optional energy mode control
+            handle_energy_mode_control(must_data=must_data)
         else:
             print("Unable to get data from the inverter.")
 
