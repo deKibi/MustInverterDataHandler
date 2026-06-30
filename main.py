@@ -12,7 +12,10 @@ from dotenv import load_dotenv
 # Custom Modules
 from mysql_database import MysqlConnectionHandler
 from mysql_database.tables import MustDataTable
-from config import MUST_PORT, DATA_GATHER_INTERVAL_SECONDS
+from config import (
+    MUST_PORT, DATA_GATHER_INTERVAL_SECONDS,
+    ENABLE_AUTO_SWITCH, ENABLE_GRID_OUTAGE_AUTO_SWITCH
+)
 from energy_mode_control.energy_mode_controller import (
     handle_energy_mode_control,
 )
@@ -131,6 +134,10 @@ def main():
     # 3. Read & save data
     print("Getting inverter's data...")
     print(f"Data gathering interval is set to: {DATA_GATHER_INTERVAL_SECONDS} seconds.")
+    if ENABLE_AUTO_SWITCH:
+        print("Time-based energy mode auto-switch is enabled.")
+    if ENABLE_GRID_OUTAGE_AUTO_SWITCH:
+        print("Grid outage energy mode auto-switch is enabled.")
 
     while True:
         # 1. Get data
