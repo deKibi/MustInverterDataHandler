@@ -40,6 +40,23 @@ def is_time_reached(
     return current_time >= target_time
 
 
+def is_time_in_window(
+    start_time: time,
+    end_time: time,
+    current_datetime: datetime | None = None,
+) -> bool:
+    """Return whether the current time is in a same-day time window."""
+    if current_datetime is None:
+        current_datetime = get_current_kyiv_datetime()
+
+    current_time = time(
+        hour=current_datetime.hour,
+        minute=current_datetime.minute,
+    )
+
+    return start_time <= current_time < end_time
+
+
 if __name__ == '__main__':
     print("debugging time_utils")
 

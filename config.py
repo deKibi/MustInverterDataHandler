@@ -2,6 +2,7 @@
 
 # Standard Libraries
 import logging
+import math
 import os
 from datetime import datetime, time
 from enum import IntEnum
@@ -73,6 +74,59 @@ def get_env_int(
     try:
         value = int(raw_value.strip())
     except (TypeError, ValueError):
+        logger.warning(
+            "Invalid value for %s: %r. Using default value: %s.",
+            variable_name,
+            raw_value,
+            default,
+        )
+        return default
+
+    if min_value is not None and value < min_value:
+        logger.warning(
+            "%s is below the minimum value of %s. Using %s.",
+            variable_name,
+            min_value,
+            min_value,
+        )
+        return min_value
+
+    if max_value is not None and value > max_value:
+        logger.warning(
+            "%s is above the maximum value of %s. Using %s.",
+            variable_name,
+            max_value,
+            max_value,
+        )
+        return max_value
+
+    return value
+
+
+def get_env_float(
+    variable_name: str,
+    default: float,
+    min_value: float | None = None,
+    max_value: float | None = None,
+) -> float:
+    """Read and optionally limit a floating-point environment variable."""
+    raw_value = os.getenv(variable_name)
+
+    if raw_value is None:
+        return default
+
+    try:
+        value = float(raw_value.strip())
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid value for %s: %r. Using default value: %s.",
+            variable_name,
+            raw_value,
+            default,
+        )
+        return default
+
+    if not math.isfinite(value):
         logger.warning(
             "Invalid value for %s: %r. Using default value: %s.",
             variable_name,
@@ -174,6 +228,77 @@ GRID_OUTAGE_TARGET_MODE: Final[EnergyMode] = (
         variable_name="GRID_OUTAGE_TARGET_MODE",
         default=EnergyMode.SUB,
     )
+)
+
+# Solar priority automatic mode switch
+ENABLE_SOLAR_AUTO_SWITCH: Final[bool] = get_env_bool(
+    variable_name="ENABLE_SOLAR_AUTO_SWITCH",
+    default=False,
+)
+
+SOLAR_AUTO_SWITCH_START_TIME: Final[time] = get_env_time(
+    variable_name="SOLAR_AUTO_SWITCH_START_TIME",
+    default="12:00",
+)
+
+SOLAR_AUTO_SWITCH_END_TIME: Final[time] = get_env_time(
+    variable_name="SOLAR_AUTO_SWITCH_END_TIME",
+    default="18:00",
+)
+
+if SOLAR_AUTO_SWITCH_START_TIME >= SOLAR_AUTO_SWITCH_END_TIME:
+    raise ValueError(
+        "SOLAR_AUTO_SWITCH_START_TIME must be earlier than "
+        "SOLAR_AUTO_SWITCH_END_TIME"
+    )
+
+SOLAR_AUTO_SWITCH_TARGET_MODE: Final[EnergyMode] = get_env_energy_mode(
+    variable_name="SOLAR_AUTO_SWITCH_TARGET_MODE",
+    default=EnergyMode.SBU,
+)
+
+SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES: Final[int] = get_env_int(
+    variable_name="SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES",
+    default=10,
+    min_value=1,
+    max_value=1440,
+)
+
+SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES: Final[int] = get_env_int(
+    variable_name="SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES",
+    default=8,
+    min_value=2,
+)
+
+SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES: Final[int] = get_env_int(
+    variable_name="SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES",
+    default=5,
+    min_value=1,
+    max_value=SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES,
+)
+
+SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE: Final[float] = get_env_float(
+    variable_name="SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE",
+    default=26.8,
+    min_value=0.0,
+)
+
+SOLAR_AUTO_SWITCH_MAX_LOAD_POWER: Final[float] = get_env_float(
+    variable_name="SOLAR_AUTO_SWITCH_MAX_LOAD_POWER",
+    default=400.0,
+    min_value=0.0,
+)
+
+SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE: Final[float] = get_env_float(
+    variable_name="SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE",
+    default=38.0,
+    min_value=0.0,
+)
+
+SOLAR_AUTO_SWITCH_MIN_CHARGER_POWER: Final[float] = get_env_float(
+    variable_name="SOLAR_AUTO_SWITCH_MIN_CHARGER_POWER",
+    default=80.0,
+    min_value=0.0,
 )
 
 

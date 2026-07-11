@@ -2,16 +2,22 @@
 
 # Standard Libraries
 import logging
+import time
 from typing import Any, Final
 
 # Custom Modules
 from config import (
     ENABLE_AUTO_SWITCH,
+    ENABLE_SOLAR_AUTO_SWITCH,
     AUTO_SWITCH_TARGET_MODE,
     AUTO_SWITCH_TARGET_TIME,
     ENABLE_GRID_OUTAGE_AUTO_SWITCH,
     GRID_OUTAGE_TARGET_MODE,
+    SOLAR_AUTO_SWITCH_TARGET_MODE,
     EnergyMode
+)
+from energy_mode_control.solar_auto_switch import (
+    should_switch_to_solar_priority,
 )
 from energy_mode_control.time_utils import is_time_reached
 from energy_mode_control.energy_mode_switcher import (
@@ -21,20 +27,33 @@ from energy_mode_control.energy_mode_switcher import (
 
 # Grid availability
 GRID_OUTAGE_VOLTAGE_THRESHOLD: Final[float] = 10.0
+ENERGY_MODE_COMMAND_COOLDOWN_SECONDS: Final[int] = 300
 
 logger = logging.getLogger(__name__)
 
+_last_command_timestamps: dict[EnergyMode, float] = {}
 
-def handle_energy_mode_control(must_data: dict[str, Any] | None) -> bool:
+
+def handle_energy_mode_control(
+    must_data: dict[str, Any] | None,
+    solar_history: list[dict[str, Any]] | None = None,
+) -> bool:
     try:
-        return _handle_energy_mode_control(must_data)
+        return _handle_energy_mode_control(must_data, solar_history)
     except Exception as e:
         logger.exception("Failed to handle energy mode control: %s", e)
         return False
 
 
-def _handle_energy_mode_control(must_data: dict[str, Any] | None) -> bool:
-    if not ENABLE_AUTO_SWITCH and not ENABLE_GRID_OUTAGE_AUTO_SWITCH:
+def _handle_energy_mode_control(
+    must_data: dict[str, Any] | None,
+    solar_history: list[dict[str, Any]] | None = None,
+) -> bool:
+    if (
+        not ENABLE_AUTO_SWITCH
+        and not ENABLE_GRID_OUTAGE_AUTO_SWITCH
+        and not ENABLE_SOLAR_AUTO_SWITCH
+    ):
         logger.info(
             "All automatic energy mode control features are disabled, exiting."
         )
@@ -97,6 +116,16 @@ def _handle_energy_mode_control(must_data: dict[str, Any] | None) -> bool:
         target_mode = AUTO_SWITCH_TARGET_MODE
         switch_reason = "auto-switch target time has been reached"
 
+    # Solar rule only switches from SUB while the grid is available.
+    elif (
+        ENABLE_SOLAR_AUTO_SWITCH
+        and is_grid_available
+        and current_energy_mode == EnergyMode.SUB
+        and should_switch_to_solar_priority(solar_history)
+    ):
+        target_mode = SOLAR_AUTO_SWITCH_TARGET_MODE
+        switch_reason = "solar, battery, and load conditions are suitable"
+
     if target_mode is None:
         logger.info("No energy mode switch is currently required.")
         return False
@@ -108,6 +137,21 @@ def _handle_energy_mode_control(must_data: dict[str, Any] | None) -> bool:
         )
         return False
 
+    current_timestamp = time.monotonic()
+    last_command_timestamp = _last_command_timestamps.get(target_mode)
+
+    if (
+        last_command_timestamp is not None
+        and current_timestamp - last_command_timestamp
+        < ENERGY_MODE_COMMAND_COOLDOWN_SECONDS
+    ):
+        logger.info(
+            "Skipping repeated %s command during the %s-second cooldown.",
+            target_mode.name,
+            ENERGY_MODE_COMMAND_COOLDOWN_SECONDS,
+        )
+        return False
+
     logger.info(
         "Energy mode switch required: %s -> %s. Reason: %s.",
         current_energy_mode.name,
@@ -115,8 +159,8 @@ def _handle_energy_mode_control(must_data: dict[str, Any] | None) -> bool:
         switch_reason,
     )
 
-    # The real inverter command will be added here:
     switch_energy_mode(
         target_mode=target_mode,
     )
+    _last_command_timestamps[target_mode] = time.monotonic()
     return True

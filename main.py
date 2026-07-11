@@ -13,7 +13,9 @@ from config import (
     DATA_GATHER_INTERVAL_SECONDS,
     ENABLE_AUTO_SWITCH,
     ENABLE_GRID_OUTAGE_AUTO_SWITCH,
+    ENABLE_SOLAR_AUTO_SWITCH,
     MUST_PORT,
+    SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES,
 )
 from energy_mode_control.energy_mode_controller import (
     handle_energy_mode_control,
@@ -149,6 +151,8 @@ def main():
         logger.info("Time-based energy mode auto-switch is enabled.")
     if ENABLE_GRID_OUTAGE_AUTO_SWITCH:
         logger.info("Grid outage energy mode auto-switch is enabled.")
+    if ENABLE_SOLAR_AUTO_SWITCH:
+        logger.info("Solar priority energy mode auto-switch is enabled.")
 
     while True:
         # 1. Get data
@@ -161,7 +165,27 @@ def main():
             logger.info("Data inserted into the database.")
 
             # 3. Handle optional energy mode control
-            handle_energy_mode_control(must_data=must_data)
+            solar_history = None
+
+            if ENABLE_SOLAR_AUTO_SWITCH:
+                try:
+                    solar_history = (
+                        must_data_table.get_recent_solar_switch_data(
+                            lookback_minutes=(
+                                SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES
+                            ),
+                        )
+                    )
+                except Exception as error:
+                    logger.exception(
+                        "Unable to read solar auto-switch history: %s",
+                        error,
+                    )
+
+            handle_energy_mode_control(
+                must_data=must_data,
+                solar_history=solar_history,
+            )
         else:
             logger.warning("Unable to get data from the inverter.")
 
