@@ -1,24 +1,31 @@
 # main.py
 
 # Standard Libraries
-from typing import Optional, Final
+import logging
 import os
-from routines import *
-from mapper import *
+from typing import Final, Optional
 
 # Third-party Libraries
 from dotenv import load_dotenv
 
 # Custom Modules
-from mysql_database import MysqlConnectionHandler
-from mysql_database.tables import MustDataTable
 from config import (
-    MUST_PORT, DATA_GATHER_INTERVAL_SECONDS,
-    ENABLE_AUTO_SWITCH, ENABLE_GRID_OUTAGE_AUTO_SWITCH
+    DATA_GATHER_INTERVAL_SECONDS,
+    ENABLE_AUTO_SWITCH,
+    ENABLE_GRID_OUTAGE_AUTO_SWITCH,
+    MUST_PORT,
 )
 from energy_mode_control.energy_mode_controller import (
     handle_energy_mode_control,
 )
+from logging_config import configure_logging, log_inverter_data
+from mapper import *
+from mysql_database import MysqlConnectionHandler
+from mysql_database.tables import MustDataTable
+from routines import *
+
+
+logger = logging.getLogger(__name__)
 
 
 class MustInverterDataHandler:
@@ -106,18 +113,19 @@ class MustInverterDataHandler:
             return merged_result
 
         except Exception as e:
-            print("Error while getting inverter's data:", str(e))
+            logger.exception("Error while getting inverter's data: %s", e)
 
 
 def main():
-    print("Initializing project.")
+    configure_logging()
+    logger.info("Initializing project.")
     load_dotenv()  # load vars from .env into our environment
 
     # 1. Create instance of class MustInverterDataHandler
     must_inverter_data_handler = MustInverterDataHandler()
 
     # 2. Initialize MySQL database connection
-    print("Connecting to MySQL, it may take some time, please wait...")
+    logger.info("Connecting to MySQL, it may take some time, please wait...")
     mysql_connection_handler = MysqlConnectionHandler()
     mysql_connection_handler.initialize_connection(
         db_host=os.getenv("MYSQL_HOST", "localhost"),
@@ -127,35 +135,42 @@ def main():
         pool_name="must_python_worker",
         pool_size=2
     )
-    print("Initializing MySQL tables, it may take some time, please wait...")
+    logger.info("Initializing MySQL tables, it may take some time, please wait...")
     must_data_table = MustDataTable(connection_handler=mysql_connection_handler)
     must_data_table.initialize_table()
 
     # 3. Read & save data
-    print("Getting inverter's data...")
-    print(f"Data gathering interval is set to: {DATA_GATHER_INTERVAL_SECONDS} seconds.")
+    logger.info("Getting inverter's data...")
+    logger.info(
+        "Data gathering interval is set to: %s seconds.",
+        DATA_GATHER_INTERVAL_SECONDS,
+    )
     if ENABLE_AUTO_SWITCH:
-        print("Time-based energy mode auto-switch is enabled.")
+        logger.info("Time-based energy mode auto-switch is enabled.")
     if ENABLE_GRID_OUTAGE_AUTO_SWITCH:
-        print("Grid outage energy mode auto-switch is enabled.")
+        logger.info("Grid outage energy mode auto-switch is enabled.")
 
     while True:
         # 1. Get data
         must_data = must_inverter_data_handler.get_data()
-        print("Inverter's data received:", must_data)
+        log_inverter_data(must_data)
 
         # 2. Check & insert data
         if must_data and len(must_data) > 2:
             must_data_table.insert_data(data=must_data)
-            print("Data inserted into the database.")
+            logger.info("Data inserted into the database.")
 
             # 3. Handle optional energy mode control
             handle_energy_mode_control(must_data=must_data)
         else:
-            print("Unable to get data from the inverter.")
+            logger.warning("Unable to get data from the inverter.")
 
-        print(f"\nSleeping for {DATA_GATHER_INTERVAL_SECONDS} seconds...")
+        logger.info(
+            "Sleeping for %s seconds...",
+            DATA_GATHER_INTERVAL_SECONDS,
+        )
         time.sleep(DATA_GATHER_INTERVAL_SECONDS)
+
 
 if __name__ == '__main__':
     main()

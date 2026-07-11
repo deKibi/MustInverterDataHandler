@@ -1,5 +1,15 @@
+# routines.py
+
+# Standard Libraries
+import logging
 import time  # Import the time module for sleep
+
+# Third-party Libraries
 import serial
+
+
+logger = logging.getLogger(__name__)
+
 
 def bytes_to_data_array(byte_array, arr_length):
     if len(byte_array) != arr_length * 2 + 5:
@@ -24,6 +34,7 @@ def bytes_to_data_array(byte_array, arr_length):
             num1 += 1
 
     return str_array
+
 
 def generate_crc(hex_string):
     hex_string = hex_string.replace(" ", "")
@@ -53,6 +64,7 @@ def generate_crc(hex_string):
     num_array2[-2] = max_value1
     return num_array2
 
+
 def get_part_arr(ser, command_bytes, data_length, max_loop_count=20):
     try:
         ser.write(command_bytes)
@@ -65,9 +77,10 @@ def get_part_arr(ser, command_bytes, data_length, max_loop_count=20):
         num_array = ser.read(ser.in_waiting)
         return bytes_to_data_array(num_array, data_length)
     except Exception as e:
-        print("Error:", str(e))
+        logger.exception("Error: %s", e)
         return None
-        
+
+
 def get_part_arr_serialin(serial_port, command_bytes, data_length, max_loop_count=20):
     try:
         with serial.Serial(serial_port, baudrate=19200, timeout=1) as ser:
@@ -82,5 +95,5 @@ def get_part_arr_serialin(serial_port, command_bytes, data_length, max_loop_coun
             num_array = ser.read(ser.in_waiting)
             return bytes_to_data_array(num_array,data_length)
     except Exception as e:
-        print("Error:", str(e))
+        logger.exception("Error: %s", e)
         return None

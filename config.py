@@ -1,6 +1,7 @@
 # config.py
 
 # Standard Libraries
+import logging
 import os
 from datetime import datetime, time
 from enum import IntEnum
@@ -11,6 +12,8 @@ from dotenv import load_dotenv
 
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 class EnergyMode(IntEnum):
@@ -70,23 +73,29 @@ def get_env_int(
     try:
         value = int(raw_value.strip())
     except (TypeError, ValueError):
-        print(
-            f"Invalid value for {variable_name}: {raw_value!r}. "
-            f"Using default value: {default}."
+        logger.warning(
+            "Invalid value for %s: %r. Using default value: %s.",
+            variable_name,
+            raw_value,
+            default,
         )
         return default
 
     if min_value is not None and value < min_value:
-        print(
-            f"{variable_name} is below the minimum value "
-            f"of {min_value}. Using {min_value}."
+        logger.warning(
+            "%s is below the minimum value of %s. Using %s.",
+            variable_name,
+            min_value,
+            min_value,
         )
         return min_value
 
     if max_value is not None and value > max_value:
-        print(
-            f"{variable_name} is above the maximum value "
-            f"of {max_value}. Using {max_value}."
+        logger.warning(
+            "%s is above the maximum value of %s. Using %s.",
+            variable_name,
+            max_value,
+            max_value,
         )
         return max_value
 
