@@ -1,41 +1,36 @@
 # main.py
 
 # Standard Libraries
+import importlib
 from logging.handlers import TimedRotatingFileHandler
 import logging
 from pathlib import Path
+from types import ModuleType
 from typing import Optional
-
-# Third-party Libraries
-from dotenv import load_dotenv
 
 # Custom Modules
 from mapper import *
-from mysql_database import MysqlConnectionHandler
-from mysql_database.tables import MustDataTable
 from routines import *
-from config import (
-    DATA_GATHER_INTERVAL_SECONDS,
-    ENABLE_AUTO_SWITCH,
-    ENABLE_GRID_OUTAGE_AUTO_SWITCH,
-    LOG_LEVEL,
-    MUST_PORT,
-    MYSQL_DATABASE,
-    MYSQL_HOST,
-    MYSQL_PASSWORD,
-    MYSQL_USER,
-    get_startup_configuration_summary,
-    log_configuration_warnings,
-)
-from energy_mode_control.energy_mode_controller import (
-    handle_energy_mode_control,
-)
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-def configure_logging() -> None:
+def configure_bootstrap_logging() -> None:
+    """Configure console logging before application config is imported."""
+    logging.basicConfig(
+        level=logging.ERROR,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        force=True,
+    )
+
+
+def load_application_config() -> ModuleType:
+    """Import and validate the application configuration."""
+    return importlib.import_module("config")
+
+
+def configure_logging(log_level: int) -> None:
     """Configure console and daily rotating file logging."""
     logs_directory = Path(__file__).resolve().parent / "logs"
     logs_directory.mkdir(exist_ok=True)
@@ -56,19 +51,23 @@ def configure_logging() -> None:
     file_handler.setFormatter(formatter)
 
     logging.basicConfig(
-        level=LOG_LEVEL,
+        level=log_level,
         handlers=(console_handler, file_handler),
         force=True,
     )
 
 
 class MustInverterDataHandler:
-    def __init__(self):
+    def __init__(self, serial_port: str | None = None):
         # Define the serial port (change the port name as needed)
         # (Optional) Get the port from .env
-        load_dotenv()  # Load vars from .env into our environment
+        if serial_port is None:
+            from config import MUST_PORT
+
+            serial_port = MUST_PORT
+
         # serial_port (for Linux primarily) = "/dev/ttyUSB0"
-        self._serial_port = MUST_PORT
+        self._serial_port = serial_port
 
         # Define the configuration for command strings # Set to True or False as needed
         # This configuration can slow down the execution
@@ -151,26 +150,44 @@ class MustInverterDataHandler:
 
 
 def main():
-    configure_logging()
+    configure_bootstrap_logging()
+
+    try:
+        app_config = load_application_config()
+    except ValueError as error:
+        LOGGER.error("Application configuration is invalid: %s", error)
+        raise SystemExit(1) from None
+
+    configure_logging(log_level=app_config.LOG_LEVEL)
+
+    # Import application services only after configuration validation.
+    from energy_mode_control.energy_mode_controller import (
+        handle_energy_mode_control,
+    )
+    from mysql_database import MysqlConnectionHandler
+    from mysql_database.tables import MustDataTable
+
     LOGGER.info("Application configuration loaded and validated.")
-    LOGGER.info(get_startup_configuration_summary())
-    log_configuration_warnings()
+    LOGGER.info(app_config.get_startup_configuration_summary())
+    app_config.log_configuration_warnings()
     LOGGER.info("Initializing application.")
-    load_dotenv()  # load vars from .env into our environment
 
     # 1. Create instance of class MustInverterDataHandler
-    must_inverter_data_handler = MustInverterDataHandler()
+    must_inverter_data_handler = MustInverterDataHandler(
+        serial_port=app_config.MUST_PORT,
+    )
 
     # 2. Initialize MySQL database connection
     LOGGER.info("Connecting to MySQL. This may take some time.")
     mysql_connection_handler = MysqlConnectionHandler()
     mysql_connection_handler.initialize_connection(
-        db_host=MYSQL_HOST,
-        db_name=MYSQL_DATABASE,
-        db_user=MYSQL_USER,
-        db_password=MYSQL_PASSWORD,
+        db_host=app_config.MYSQL_HOST,
+        db_port=app_config.MYSQL_PORT,
+        db_name=app_config.MYSQL_DATABASE,
+        db_user=app_config.MYSQL_USER,
+        db_password=app_config.MYSQL_PASSWORD,
         pool_name="must_python_worker",
-        pool_size=2
+        pool_size=2,
     )
     LOGGER.info("Initializing MySQL tables. This may take some time.")
     must_data_table = MustDataTable(connection_handler=mysql_connection_handler)
@@ -180,11 +197,11 @@ def main():
     LOGGER.info("Starting inverter data collection.")
     LOGGER.info(
         "Data gathering interval is set to %d seconds.",
-        DATA_GATHER_INTERVAL_SECONDS,
+        app_config.DATA_GATHER_INTERVAL_SECONDS,
     )
-    if ENABLE_AUTO_SWITCH:
+    if app_config.ENABLE_AUTO_SWITCH:
         LOGGER.info("Time-based energy mode auto-switch is enabled.")
-    if ENABLE_GRID_OUTAGE_AUTO_SWITCH:
+    if app_config.ENABLE_GRID_OUTAGE_AUTO_SWITCH:
         LOGGER.info("Grid outage energy mode auto-switch is enabled.")
 
     while True:
@@ -204,9 +221,9 @@ def main():
 
         LOGGER.info(
             "Sleeping for %d seconds.",
-            DATA_GATHER_INTERVAL_SECONDS,
+            app_config.DATA_GATHER_INTERVAL_SECONDS,
         )
-        time.sleep(DATA_GATHER_INTERVAL_SECONDS)
+        time.sleep(app_config.DATA_GATHER_INTERVAL_SECONDS)
 
 
 if __name__ == '__main__':

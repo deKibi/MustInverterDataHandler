@@ -19,22 +19,24 @@ class MysqlConnectionHandler:
         self._connection_pool: Optional[MySQLConnectionPool] = None
 
     def initialize_connection(
-            self,
-            db_host: str,
-            db_name: str,
-            db_user: str,
-            db_password: str,
-            pool_name:str,
-            pool_size: int
+        self,
+        db_host: str,
+        db_port: int,
+        db_name: str,
+        db_user: str,
+        db_password: str,
+        pool_name: str,
+        pool_size: int,
     ) -> Optional[MySQLConnectionPool]:
         try:
             new_pool = MySQLConnectionPool(
                 host=db_host,
+                port=db_port,
                 database=db_name,
                 user=db_user,
                 password=db_password,
                 pool_name=pool_name,
-                pool_size=pool_size
+                pool_size=pool_size,
             )
             self._connection_pool = new_pool
             LOGGER.info(
@@ -44,9 +46,11 @@ class MysqlConnectionHandler:
             )
         except Exception:
             LOGGER.exception(
-                "Unable to connect to MySQL database %s at %s via user %s.",
+                "Unable to connect to MySQL database %s at %s:%d "
+                "via user %s.",
                 db_name,
                 db_host,
+                db_port,
                 db_user,
             )
             sys.exit(1)

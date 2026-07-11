@@ -45,10 +45,14 @@ MUST_PORT=COM3
 
 # MYSQL DATABASE
 MYSQL_HOST='db_ip'
+MYSQL_PORT=3306
 MYSQL_DATABASE='db_name'
 MYSQL_USER='db_user'
 MYSQL_PASSWORD='user_password'
 ```
+
+`MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, and `MYSQL_PASSWORD` are required
+and must not be empty. `MYSQL_PORT` is optional and defaults to `3306`.
 ```
 # (Optional) DATA_GATHER_INTERVAL_SECONDS
 # Min: 10 seconds / Max: 1 hour, Defaul: 60 seconds

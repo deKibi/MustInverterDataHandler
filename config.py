@@ -21,6 +21,19 @@ def is_env_configured(variable_name: str) -> bool:
     return bool(os.getenv(variable_name, "").strip())
 
 
+def get_required_env(variable_name: str) -> str:
+    """Read a required, non-empty environment variable."""
+    value = os.getenv(variable_name)
+
+    if value is None or not value.strip():
+        raise ValueError(
+            f"Required environment variable {variable_name} "
+            "is not set or is empty"
+        )
+
+    return value.strip()
+
+
 def get_env_str(variable_name: str, default: str) -> str:
     """Read a non-empty string environment variable or use its default."""
     value = os.getenv(variable_name)
@@ -173,30 +186,18 @@ DEFAULT_MUST_PORT: Final[str] = "COM3"
 MUST_PORT_IS_CONFIGURED: Final[bool] = is_env_configured("MUST_PORT")
 MUST_PORT: Final[str] = get_env_str("MUST_PORT", DEFAULT_MUST_PORT)
 
-DEFAULT_MYSQL_HOST: Final[str] = "localhost"
-MYSQL_HOST_IS_CONFIGURED: Final[bool] = is_env_configured("MYSQL_HOST")
-MYSQL_HOST: Final[str] = get_env_str("MYSQL_HOST", DEFAULT_MYSQL_HOST)
+MYSQL_HOST: Final[str] = get_required_env("MYSQL_HOST")
+MYSQL_DATABASE: Final[str] = get_required_env("MYSQL_DATABASE")
+MYSQL_USER: Final[str] = get_required_env("MYSQL_USER")
+MYSQL_PASSWORD: Final[str] = get_required_env("MYSQL_PASSWORD")
 
-DEFAULT_MYSQL_DATABASE: Final[str] = "must_data"
-MYSQL_DATABASE_IS_CONFIGURED: Final[bool] = is_env_configured(
-    "MYSQL_DATABASE"
-)
-MYSQL_DATABASE: Final[str] = get_env_str(
-    "MYSQL_DATABASE",
-    DEFAULT_MYSQL_DATABASE,
-)
-
-DEFAULT_MYSQL_USER: Final[str] = "root"
-MYSQL_USER_IS_CONFIGURED: Final[bool] = is_env_configured("MYSQL_USER")
-MYSQL_USER: Final[str] = get_env_str("MYSQL_USER", DEFAULT_MYSQL_USER)
-
-DEFAULT_MYSQL_PASSWORD: Final[str] = ""
-MYSQL_PASSWORD_IS_CONFIGURED: Final[bool] = is_env_configured(
-    "MYSQL_PASSWORD"
-)
-MYSQL_PASSWORD: Final[str] = get_env_str(
-    "MYSQL_PASSWORD",
-    DEFAULT_MYSQL_PASSWORD,
+DEFAULT_MYSQL_PORT: Final[int] = 3306
+MYSQL_PORT_IS_CONFIGURED: Final[bool] = is_env_configured("MYSQL_PORT")
+MYSQL_PORT: Final[int] = get_env_int(
+    variable_name="MYSQL_PORT",
+    default=DEFAULT_MYSQL_PORT,
+    min_value=1,
+    max_value=65535,
 )
 
 DEFAULT_DATA_GATHER_INTERVAL_SECONDS: Final[int] = 60
@@ -278,11 +279,6 @@ def _configuration_value_status(
 
 def get_startup_configuration_summary() -> str:
     """Return a safe, human-readable summary of the active configuration."""
-    password_status = (
-        "configured"
-        if MYSQL_PASSWORD_IS_CONFIGURED
-        else "not configured (using empty default)"
-    )
     auto_switch_status = _configuration_value_status(
         "enabled" if ENABLE_AUTO_SWITCH else "disabled",
         ENABLE_AUTO_SWITCH_IS_CONFIGURED,
@@ -325,25 +321,16 @@ def get_startup_configuration_summary() -> str:
                 MUST_PORT_IS_CONFIGURED,
                 DEFAULT_MUST_PORT,
             ),
-            "  MySQL host: "
+            f"  MySQL host: {MYSQL_HOST}",
+            f"  MySQL database: {MYSQL_DATABASE}",
+            f"  MySQL user: {MYSQL_USER}",
+            "  MySQL password: configured",
+            "  MySQL port: "
             + _configuration_value_status(
-                MYSQL_HOST,
-                MYSQL_HOST_IS_CONFIGURED,
-                DEFAULT_MYSQL_HOST,
+                str(MYSQL_PORT),
+                MYSQL_PORT_IS_CONFIGURED,
+                str(DEFAULT_MYSQL_PORT),
             ),
-            "  MySQL database: "
-            + _configuration_value_status(
-                MYSQL_DATABASE,
-                MYSQL_DATABASE_IS_CONFIGURED,
-                DEFAULT_MYSQL_DATABASE,
-            ),
-            "  MySQL user: "
-            + _configuration_value_status(
-                MYSQL_USER,
-                MYSQL_USER_IS_CONFIGURED,
-                DEFAULT_MYSQL_USER,
-            ),
-            f"  MySQL password: {password_status}",
             "  Data gathering interval: "
             + _configuration_value_status(
                 str(DATA_GATHER_INTERVAL_SECONDS),
@@ -393,17 +380,10 @@ def log_configuration_warnings() -> None:
 
     default_settings = (
         ("MUST_PORT", MUST_PORT_IS_CONFIGURED, DEFAULT_MUST_PORT),
-        ("MYSQL_HOST", MYSQL_HOST_IS_CONFIGURED, DEFAULT_MYSQL_HOST),
         (
-            "MYSQL_DATABASE",
-            MYSQL_DATABASE_IS_CONFIGURED,
-            DEFAULT_MYSQL_DATABASE,
-        ),
-        ("MYSQL_USER", MYSQL_USER_IS_CONFIGURED, DEFAULT_MYSQL_USER),
-        (
-            "MYSQL_PASSWORD",
-            MYSQL_PASSWORD_IS_CONFIGURED,
-            "<empty>",
+            "MYSQL_PORT",
+            MYSQL_PORT_IS_CONFIGURED,
+            str(DEFAULT_MYSQL_PORT),
         ),
         (
             "DATA_GATHER_INTERVAL_SECONDS",
