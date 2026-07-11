@@ -1,24 +1,65 @@
 # main.py
 
 # Standard Libraries
-from typing import Optional, Final
-import os
-from routines import *
-from mapper import *
+from logging.handlers import TimedRotatingFileHandler
+import logging
+from pathlib import Path
+from typing import Optional
 
 # Third-party Libraries
 from dotenv import load_dotenv
 
 # Custom Modules
+from mapper import *
 from mysql_database import MysqlConnectionHandler
 from mysql_database.tables import MustDataTable
+from routines import *
 from config import (
-    MUST_PORT, DATA_GATHER_INTERVAL_SECONDS,
-    ENABLE_AUTO_SWITCH, ENABLE_GRID_OUTAGE_AUTO_SWITCH
+    DATA_GATHER_INTERVAL_SECONDS,
+    ENABLE_AUTO_SWITCH,
+    ENABLE_GRID_OUTAGE_AUTO_SWITCH,
+    LOG_LEVEL,
+    MUST_PORT,
+    MYSQL_DATABASE,
+    MYSQL_HOST,
+    MYSQL_PASSWORD,
+    MYSQL_USER,
+    get_startup_configuration_summary,
+    log_configuration_warnings,
 )
 from energy_mode_control.energy_mode_controller import (
     handle_energy_mode_control,
 )
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def configure_logging() -> None:
+    """Configure console and daily rotating file logging."""
+    logs_directory = Path(__file__).resolve().parent / "logs"
+    logs_directory.mkdir(exist_ok=True)
+
+    formatter = logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    )
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+
+    file_handler = TimedRotatingFileHandler(
+        filename=logs_directory / "app.log",
+        when="midnight",
+        interval=1,
+        backupCount=30,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
+
+    logging.basicConfig(
+        level=LOG_LEVEL,
+        handlers=(console_handler, file_handler),
+        force=True,
+    )
 
 
 class MustInverterDataHandler:
@@ -105,57 +146,68 @@ class MustInverterDataHandler:
 
             return merged_result
 
-        except Exception as e:
-            print("Error while getting inverter's data:", str(e))
+        except Exception:
+            LOGGER.exception("Failed to get inverter data.")
 
 
 def main():
-    print("Initializing project.")
+    configure_logging()
+    LOGGER.info("Application configuration loaded and validated.")
+    LOGGER.info(get_startup_configuration_summary())
+    log_configuration_warnings()
+    LOGGER.info("Initializing application.")
     load_dotenv()  # load vars from .env into our environment
 
     # 1. Create instance of class MustInverterDataHandler
     must_inverter_data_handler = MustInverterDataHandler()
 
     # 2. Initialize MySQL database connection
-    print("Connecting to MySQL, it may take some time, please wait...")
+    LOGGER.info("Connecting to MySQL. This may take some time.")
     mysql_connection_handler = MysqlConnectionHandler()
     mysql_connection_handler.initialize_connection(
-        db_host=os.getenv("MYSQL_HOST", "localhost"),
-        db_name=os.getenv("MYSQL_DATABASE", "must_data"),
-        db_user=os.getenv("MYSQL_USER", "root"),
-        db_password=os.getenv("MYSQL_PASSWORD", ""),
+        db_host=MYSQL_HOST,
+        db_name=MYSQL_DATABASE,
+        db_user=MYSQL_USER,
+        db_password=MYSQL_PASSWORD,
         pool_name="must_python_worker",
         pool_size=2
     )
-    print("Initializing MySQL tables, it may take some time, please wait...")
+    LOGGER.info("Initializing MySQL tables. This may take some time.")
     must_data_table = MustDataTable(connection_handler=mysql_connection_handler)
     must_data_table.initialize_table()
 
     # 3. Read & save data
-    print("Getting inverter's data...")
-    print(f"Data gathering interval is set to: {DATA_GATHER_INTERVAL_SECONDS} seconds.")
+    LOGGER.info("Starting inverter data collection.")
+    LOGGER.info(
+        "Data gathering interval is set to %d seconds.",
+        DATA_GATHER_INTERVAL_SECONDS,
+    )
     if ENABLE_AUTO_SWITCH:
-        print("Time-based energy mode auto-switch is enabled.")
+        LOGGER.info("Time-based energy mode auto-switch is enabled.")
     if ENABLE_GRID_OUTAGE_AUTO_SWITCH:
-        print("Grid outage energy mode auto-switch is enabled.")
+        LOGGER.info("Grid outage energy mode auto-switch is enabled.")
 
     while True:
         # 1. Get data
         must_data = must_inverter_data_handler.get_data()
-        print("Inverter's data received:", must_data)
+        LOGGER.debug("Inverter data received: %s", must_data)
 
         # 2. Check & insert data
         if must_data and len(must_data) > 2:
             must_data_table.insert_data(data=must_data)
-            print("Data inserted into the database.")
+            LOGGER.info("Inverter data inserted into the database.")
 
             # 3. Handle optional energy mode control
             handle_energy_mode_control(must_data=must_data)
         else:
-            print("Unable to get data from the inverter.")
+            LOGGER.warning("Unable to get data from the inverter.")
 
-        print(f"\nSleeping for {DATA_GATHER_INTERVAL_SECONDS} seconds...")
+        LOGGER.info(
+            "Sleeping for %d seconds.",
+            DATA_GATHER_INTERVAL_SECONDS,
+        )
         time.sleep(DATA_GATHER_INTERVAL_SECONDS)
+
 
 if __name__ == '__main__':
     main()

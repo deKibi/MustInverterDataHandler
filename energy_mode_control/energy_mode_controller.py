@@ -1,6 +1,7 @@
 # energy_mode_control/energy_mode_controller.py
 
 # Standard Libraries
+import logging
 from typing import Any, Final
 
 # Custom Modules
@@ -18,6 +19,9 @@ from energy_mode_control.energy_mode_switcher import (
 )
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 # Grid availability
 GRID_OUTAGE_VOLTAGE_THRESHOLD: Final[float] = 10.0
 
@@ -25,34 +29,34 @@ GRID_OUTAGE_VOLTAGE_THRESHOLD: Final[float] = 10.0
 def handle_energy_mode_control(must_data: dict[str, Any] | None) -> bool:
     try:
         return _handle_energy_mode_control(must_data)
-    except Exception as e:
-        print("Failed to handle energy mode control:", e)
+    except Exception:
+        LOGGER.exception("Failed to handle energy mode control.")
         return False
 
 
 def _handle_energy_mode_control(must_data: dict[str, Any] | None) -> bool:
     if not ENABLE_AUTO_SWITCH and not ENABLE_GRID_OUTAGE_AUTO_SWITCH:
-        print("All automatic energy mode control features are disabled, exiting.")
+        LOGGER.debug("All automatic energy mode control features are disabled.")
         return False
 
     if must_data is None:
-        print("must_data is None - cannot control energy mode.")
+        LOGGER.warning("Inverter data is missing; cannot control energy mode.")
         return False
 
     # Further business logic will be here.
     if not isinstance(must_data, dict):
-        print("must_data has invalid type.")
+        LOGGER.warning("Inverter data has an invalid type.")
         return False
 
     current_energy_mode_raw = must_data.get("EnergyUseMode")
     grid_voltage_raw = must_data.get("GridVoltage")
 
     if current_energy_mode_raw is None:
-        print("EnergyUseMode is missing from must_data.")
+        LOGGER.warning("EnergyUseMode is missing from inverter data.")
         return False
 
     if grid_voltage_raw is None:
-        print("GridVoltage is missing from must_data.")
+        LOGGER.warning("GridVoltage is missing from inverter data.")
         return False
 
     try:
@@ -61,9 +65,10 @@ def _handle_energy_mode_control(must_data: dict[str, Any] | None) -> bool:
         )
         grid_voltage = float(grid_voltage_raw)
     except (TypeError, ValueError) as error:
-        print(
+        LOGGER.warning(
             "EnergyUseMode or GridVoltage contains "
-            f"an invalid value: {error}"
+            "an invalid value: %s",
+            error,
         )
         return False
 
@@ -92,20 +97,21 @@ def _handle_energy_mode_control(must_data: dict[str, Any] | None) -> bool:
         switch_reason = "auto-switch target time has been reached"
 
     if target_mode is None:
-        print("No energy mode switch is currently required.")
+        LOGGER.debug("No energy mode switch is currently required.")
         return False
 
     if current_energy_mode == target_mode:
-        print(
-            f"Inverter is already operating in "
-            f"{target_mode.name} mode."
+        LOGGER.debug(
+            "Inverter is already operating in %s mode.",
+            target_mode.name,
         )
         return False
 
-    print(
-        f"Energy mode switch required: "
-        f"{current_energy_mode.name} -> {target_mode.name}. "
-        f"Reason: {switch_reason}."
+    LOGGER.info(
+        "Energy mode switch required: %s -> %s. Reason: %s.",
+        current_energy_mode.name,
+        target_mode.name,
+        switch_reason,
     )
 
     # The real inverter command will be added here:

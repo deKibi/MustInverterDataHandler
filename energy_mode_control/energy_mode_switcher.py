@@ -1,14 +1,18 @@
 # energy_mode_control/energy_mode_switcher.py
 
 # Standard Libraries
+import logging
 import time
 
-# Third-Party Libraries
+# Third-party Libraries
 import serial
 
 # Custom Modules
 from config import EnergyMode, MUST_PORT
 from routines import generate_crc
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def build_energy_mode_command(mode: EnergyMode) -> bytes:
@@ -88,11 +92,12 @@ def switch_energy_mode(
     """
     frame = build_energy_mode_command(target_mode)
 
-    print(
-        f"Switching inverter energy mode to "
-        f"{target_mode.name} ({target_mode.value})."
+    LOGGER.info(
+        "Switching inverter energy mode to %s (%d).",
+        target_mode.name,
+        target_mode.value,
     )
-    print("Sending frame:", frame.hex(" ").upper())
+    LOGGER.debug("Sending frame: %s", frame.hex(" ").upper())
 
     with serial.Serial(
         port=port,
@@ -111,7 +116,7 @@ def switch_energy_mode(
             serial_connection.in_waiting or 1
         )
 
-    print("Response raw:", response)
+    LOGGER.debug("Raw inverter response: %s", response)
 
     return response
 

@@ -1,5 +1,15 @@
-import time  # Import the time module for sleep
+# routines.py
+
+# Standard Libraries
+import logging
+import time
+
+# Third-party Libraries
 import serial
+
+
+LOGGER = logging.getLogger(__name__)
+
 
 def bytes_to_data_array(byte_array, arr_length):
     if len(byte_array) != arr_length * 2 + 5:
@@ -64,8 +74,8 @@ def get_part_arr(ser, command_bytes, data_length, max_loop_count=20):
             num += 1
         num_array = ser.read(ser.in_waiting)
         return bytes_to_data_array(num_array, data_length)
-    except Exception as e:
-        print("Error:", str(e))
+    except Exception:
+        LOGGER.exception("Failed to read inverter data from serial connection.")
         return None
         
 def get_part_arr_serialin(serial_port, command_bytes, data_length, max_loop_count=20):
@@ -81,6 +91,6 @@ def get_part_arr_serialin(serial_port, command_bytes, data_length, max_loop_coun
                 num += 1
             num_array = ser.read(ser.in_waiting)
             return bytes_to_data_array(num_array,data_length)
-    except Exception as e:
-        print("Error:", str(e))
+    except Exception:
+        LOGGER.exception("Failed to read inverter data from serial port.")
         return None
