@@ -1,4 +1,12 @@
+# mapper.py
+
+# Standard Libraries
 import json
+import logging
+
+
+logger = logging.getLogger(__name__)
+
 
 # Function to convert a hex string representing a two's complement signed integer to an integer value.
 # It correctly handles negative values by interpreting the two's complement representation.
@@ -11,6 +19,7 @@ def twos_complement(hex_str, num_bits=16):
         value -= 1 << num_bits
     return value
 
+
 # Map a hex string to a version, e.g. 1.00.00
 def to_version(hex_str):
     value = twos_complement(hex_str)
@@ -22,6 +31,7 @@ def to_version(hex_str):
     else:
         return "1.00.00"
 
+
 def merge_json(json_list):
     merged_json = {}
     
@@ -31,7 +41,7 @@ def merge_json(json_list):
             if isinstance(data, dict):
                 merged_json.update(data)
         except json.JSONDecodeError:
-            print(f"Skipping invalid JSON: {json_str}")
+            logger.warning("Skipping invalid JSON: %s", json_str)
     
     return json.dumps(merged_json, indent=4)
 
