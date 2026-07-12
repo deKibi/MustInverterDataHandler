@@ -20,12 +20,17 @@ from config import (
     MYSQL_PASSWORD,
     MYSQL_PORT,
     MYSQL_USER,
+    SOLAR_AUTO_SWITCH_END_TIME,
     SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES,
+    SOLAR_AUTO_SWITCH_START_TIME,
     log_startup_configuration,
     validate_configuration,
 )
 from energy_mode_control.energy_mode_controller import (
     handle_energy_mode_control,
+)
+from energy_mode_control.solar_windows import (
+    log_solar_window_configuration,
 )
 from logging_config import configure_logging, log_inverter_data
 from mapper import *
@@ -134,6 +139,10 @@ def main():
         raise SystemExit(1) from error
 
     log_startup_configuration()
+    log_solar_window_configuration(
+        start_override=SOLAR_AUTO_SWITCH_START_TIME,
+        end_override=SOLAR_AUTO_SWITCH_END_TIME,
+    )
     logger.info("Initializing project.")
 
     # 1. Create instance of class MustInverterDataHandler

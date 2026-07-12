@@ -62,6 +62,25 @@ Run the application:
 
 - `python main.py`
 
+### Solar Auto-Switch Timezone and Seasonal Windows
+
+Solar auto-switch timing always uses `ZoneInfo("Europe/Kyiv")`, independently
+of the server's local timezone. Other timezones are not configurable.
+
+When no explicit solar window is configured, the application uses these
+conservative seasonal windows:
+
+| Season | Months | Window |
+| --- | --- | --- |
+| Winter | December-February | 10:00-15:00 |
+| Spring | March-May | 09:00-18:00 |
+| Summer | June-August | 08:00-19:00 |
+| Autumn | September-November | 09:00-17:00 |
+
+`SOLAR_AUTO_SWITCH_START_TIME` and `SOLAR_AUTO_SWITCH_END_TIME` are optional.
+Either value overrides its corresponding seasonal boundary. Overrides outside
+the seasonal window produce a warning but are used without automatic clipping.
+
 
 ### Output Example (2025-11-05)
 

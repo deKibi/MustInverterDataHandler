@@ -20,6 +20,7 @@ jobs:
             coverage_args: >-
               --cov=energy_mode_control.energy_mode_controller
               --cov=energy_mode_control.solar_auto_switch
+              --cov=energy_mode_control.solar_windows
               --cov=energy_mode_control.time_utils
 
           - component: config

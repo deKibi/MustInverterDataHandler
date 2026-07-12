@@ -33,6 +33,8 @@ def isolated_config_state(monkeypatch):
 
     for variable_name, value in REQUIRED_MYSQL_VALUES.items():
         monkeypatch.setattr(config, variable_name, value)
+    monkeypatch.setattr(config, "SOLAR_AUTO_SWITCH_START_TIME", None)
+    monkeypatch.setattr(config, "SOLAR_AUTO_SWITCH_END_TIME", None)
 
     yield
 
@@ -174,6 +176,61 @@ def test_optional_missing_value_uses_default_and_records_warning(
     )
 
 
+@pytest.mark.parametrize("raw_value", [None, ""])
+def test_optional_solar_time_stays_automatic_without_warning(
+    monkeypatch,
+    raw_value,
+):
+    variable_name = "TEST_OPTIONAL_SOLAR_TIME"
+
+    if raw_value is None:
+        monkeypatch.delenv(variable_name, raising=False)
+    else:
+        monkeypatch.setenv(variable_name, raw_value)
+
+    result = config.get_env_optional_time(variable_name)
+
+    assert result is None
+    assert variable_name not in config._defaulted_variables
+    assert config._configuration_warnings == []
+
+
+def test_optional_solar_time_parses_explicit_override(monkeypatch):
+    monkeypatch.setenv("TEST_OPTIONAL_SOLAR_TIME", "12:30")
+
+    result = config.get_env_optional_time("TEST_OPTIONAL_SOLAR_TIME")
+
+    assert result == time(12, 30)
+
+
+@pytest.mark.parametrize(
+    "start_override,end_override",
+    [
+        (time(16, 0), None),
+        (None, time(8, 30)),
+        (time(18, 0), time(17, 0)),
+    ],
+)
+def test_rejects_override_invalid_for_any_season(
+    monkeypatch,
+    start_override,
+    end_override,
+):
+    monkeypatch.setattr(
+        config,
+        "SOLAR_AUTO_SWITCH_START_TIME",
+        start_override,
+    )
+    monkeypatch.setattr(
+        config,
+        "SOLAR_AUTO_SWITCH_END_TIME",
+        end_override,
+    )
+
+    with pytest.raises(config.ConfigurationError):
+        config.validate_configuration()
+
+
 def test_startup_summary_is_safe_complete_and_logged_once(caplog):
     config._record_default("MYSQL_PORT", 3306)
 
@@ -191,6 +248,8 @@ def test_startup_summary_is_safe_complete_and_logged_once(caplog):
     assert "Scheduled auto-switch:" in log_text
     assert "Grid outage auto-switch:" in log_text
     assert "Solar auto-switch:" in log_text
+    assert "window: automatic seasonal" in log_text
+    assert "timezone: Europe/Kyiv" in log_text
     assert "Solar average thresholds:" in log_text
     assert "fake-secret-password" not in log_text
     assert "fake-db-host" not in log_text

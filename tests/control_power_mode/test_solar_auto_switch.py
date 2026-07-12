@@ -1,7 +1,7 @@
 # tests/control_power_mode/test_solar_auto_switch.py
 
 # Standard Libraries
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 # Third-party Libraries
 import pytest
@@ -41,6 +41,8 @@ def solar_settings(monkeypatch):
         "SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE": 26.4,
         "SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER": 800.0,
         "SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE": 35.0,
+        "SOLAR_AUTO_SWITCH_START_TIME": time(12, 0),
+        "SOLAR_AUTO_SWITCH_END_TIME": time(18, 0),
     }
 
     for setting_name, value in settings.items():
