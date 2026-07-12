@@ -28,10 +28,13 @@ from energy_mode_control.energy_mode_switcher import (
 # Grid availability
 GRID_OUTAGE_VOLTAGE_THRESHOLD: Final[float] = 10.0
 ENERGY_MODE_COMMAND_COOLDOWN_SECONDS: Final[int] = 300
+GRID_OUTAGE_SWITCH_RULE: Final[str] = "grid_outage"
+SCHEDULED_SWITCH_RULE: Final[str] = "scheduled"
+SOLAR_SWITCH_RULE: Final[str] = "solar"
 
 logger = logging.getLogger(__name__)
 
-_last_command_timestamps: dict[EnergyMode, float] = {}
+_last_command_timestamps: dict[tuple[str, EnergyMode], float] = {}
 
 
 def handle_energy_mode_control(
@@ -98,6 +101,7 @@ def _handle_energy_mode_control(
 
     target_mode: EnergyMode | None = None
     switch_reason: str | None = None
+    switch_rule: str | None = None
 
     # Grid outage rule has the highest priority.
     if (
@@ -106,6 +110,7 @@ def _handle_energy_mode_control(
     ):
         target_mode = GRID_OUTAGE_TARGET_MODE
         switch_reason = "electrical grid is unavailable"
+        switch_rule = GRID_OUTAGE_SWITCH_RULE
 
     # Time-based rule is checked when the grid is available.
     elif (
@@ -115,6 +120,7 @@ def _handle_energy_mode_control(
     ):
         target_mode = AUTO_SWITCH_TARGET_MODE
         switch_reason = "auto-switch target time has been reached"
+        switch_rule = SCHEDULED_SWITCH_RULE
 
     # Solar rule only switches from SUB while the grid is available.
     elif (
@@ -125,8 +131,9 @@ def _handle_energy_mode_control(
     ):
         target_mode = SOLAR_AUTO_SWITCH_TARGET_MODE
         switch_reason = "solar, battery, and load conditions are suitable"
+        switch_rule = SOLAR_SWITCH_RULE
 
-    if target_mode is None:
+    if target_mode is None or switch_rule is None:
         logger.info("No energy mode switch is currently required.")
         return False
 
@@ -137,8 +144,9 @@ def _handle_energy_mode_control(
         )
         return False
 
+    cooldown_key = (switch_rule, target_mode)
     current_timestamp = time.monotonic()
-    last_command_timestamp = _last_command_timestamps.get(target_mode)
+    last_command_timestamp = _last_command_timestamps.get(cooldown_key)
 
     if (
         last_command_timestamp is not None
@@ -162,5 +170,5 @@ def _handle_energy_mode_control(
     switch_energy_mode(
         target_mode=target_mode,
     )
-    _last_command_timestamps[target_mode] = time.monotonic()
+    _last_command_timestamps[cooldown_key] = time.monotonic()
     return True
