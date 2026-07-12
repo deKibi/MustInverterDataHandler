@@ -17,6 +17,14 @@ jobs:
         include:
           - component: control-power-mode
             test_path: tests/control_power_mode
+            coverage_args: >-
+              --cov=energy_mode_control.energy_mode_controller
+              --cov=energy_mode_control.solar_auto_switch
+              --cov=energy_mode_control.time_utils
+
+          - component: config
+            test_path: tests/config
+            coverage_args: --cov=config
 
     steps:
       - uses: actions/checkout@v4
@@ -37,8 +45,6 @@ jobs:
       - name: Run ${{ matrix.component }} tests
         run: |
           python -m pytest "${{ matrix.test_path }}" \
-            --cov=energy_mode_control.energy_mode_controller \
-            --cov=energy_mode_control.solar_auto_switch \
-            --cov=energy_mode_control.time_utils \
+            ${{ matrix.coverage_args }} \
             --cov-branch \
             --cov-report=term-missing
