@@ -301,6 +301,24 @@ SOLAR_AUTO_SWITCH_MIN_CHARGER_POWER: Final[float] = get_env_float(
     min_value=0.0,
 )
 
+SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE: Final[float] = get_env_float(
+    variable_name="SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE",
+    default=26.4,
+    min_value=0.0,
+)
+
+SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER: Final[float] = get_env_float(
+    variable_name="SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER",
+    default=800.0,
+    min_value=0.0,
+)
+
+SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE: Final[float] = get_env_float(
+    variable_name="SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE",
+    default=35.0,
+    min_value=0.0,
+)
+
 
 if __name__ == '__main__':
     print("debugging config.py")

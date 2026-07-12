@@ -10,8 +10,11 @@ from typing import Any
 from config import (
     SOLAR_AUTO_SWITCH_END_TIME,
     SOLAR_AUTO_SWITCH_MAX_LOAD_POWER,
+    SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER,
     SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE,
     SOLAR_AUTO_SWITCH_MIN_CHARGER_POWER,
+    SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE,
+    SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE,
     SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE,
     SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES,
     SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES,
@@ -66,6 +69,38 @@ def should_switch_to_solar_priority(
         )
         return False
 
+    latest_sample = _normalize_sample(
+        (solar_history or [])[-1],
+        log_warning=False,
+    )
+
+    if latest_sample is None:
+        logger.info(
+            "Solar auto-switch latest telemetry sample is invalid."
+        )
+        return False
+
+    latest_conditions_met = (
+        latest_sample["BatteryVoltage"]
+        >= SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE
+        and latest_sample["PLoad"]
+        <= SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER
+        and latest_sample["PvVoltage"]
+        >= SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE
+    )
+
+    logger.info(
+        "Solar auto-switch latest values: BatteryVoltage=%.2f V, "
+        "PLoad=%.2f W, PvVoltage=%.2f V; hard limits met: %s.",
+        latest_sample["BatteryVoltage"],
+        latest_sample["PLoad"],
+        latest_sample["PvVoltage"],
+        latest_conditions_met,
+    )
+
+    if not latest_conditions_met:
+        return False
+
     averages = {
         field: sum(sample[field] for sample in valid_samples)
         / len(valid_samples)
@@ -101,35 +136,48 @@ def _get_valid_samples(
     valid_samples = []
 
     for sample in solar_history or []:
-        timestamp = sample.get("timestamp")
+        normalized_sample = _normalize_sample(sample)
 
-        if not isinstance(timestamp, datetime):
+        if normalized_sample is not None:
+            valid_samples.append(normalized_sample)
+
+    return sorted(valid_samples, key=lambda sample: sample["timestamp"])
+
+
+def _normalize_sample(
+    sample: dict[str, Any],
+    log_warning: bool = True,
+) -> dict[str, Any] | None:
+    timestamp = sample.get("timestamp")
+
+    if not isinstance(timestamp, datetime):
+        if log_warning:
             logger.warning(
                 "Skipping solar telemetry sample with invalid timestamp."
             )
-            continue
+        return None
 
-        try:
-            normalized_sample = {
-                field: float(sample[field])
-                for field in REQUIRED_TELEMETRY_FIELDS
-            }
-        except (KeyError, TypeError, ValueError):
+    try:
+        normalized_sample = {
+            field: float(sample[field])
+            for field in REQUIRED_TELEMETRY_FIELDS
+        }
+    except (KeyError, TypeError, ValueError):
+        if log_warning:
             logger.warning(
                 "Skipping incomplete or invalid solar telemetry sample."
             )
-            continue
+        return None
 
-        if not all(
-            math.isfinite(normalized_sample[field])
-            for field in REQUIRED_TELEMETRY_FIELDS
-        ):
+    if not all(
+        math.isfinite(normalized_sample[field])
+        for field in REQUIRED_TELEMETRY_FIELDS
+    ):
+        if log_warning:
             logger.warning(
                 "Skipping non-finite solar telemetry sample."
             )
-            continue
+        return None
 
-        normalized_sample["timestamp"] = timestamp
-        valid_samples.append(normalized_sample)
-
-    return sorted(valid_samples, key=lambda sample: sample["timestamp"])
+    normalized_sample["timestamp"] = timestamp
+    return normalized_sample

@@ -33,6 +33,9 @@ class SolarAutoSwitchTestCase(unittest.TestCase):
             SOLAR_AUTO_SWITCH_MAX_LOAD_POWER=400.0,
             SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE=38.0,
             SOLAR_AUTO_SWITCH_MIN_CHARGER_POWER=80.0,
+            SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE=26.4,
+            SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER=800.0,
+            SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE=35.0,
         )
         self.settings_patch.start()
 
@@ -100,6 +103,88 @@ class SolarAutoSwitchTestCase(unittest.TestCase):
                 )
 
                 self.assertFalse(result)
+
+    def test_rejects_latest_load_spike_hidden_by_good_average(self):
+        for sample in self.samples:
+            sample["PLoad"] = 100.0
+        self.samples[-1]["PLoad"] = 1200.0
+
+        result = solar_auto_switch.should_switch_to_solar_priority(
+            solar_history=self.samples,
+            current_datetime=self.current_datetime,
+        )
+
+        self.assertLess(
+            sum(sample["PLoad"] for sample in self.samples)
+            / len(self.samples),
+            400.0,
+        )
+        self.assertFalse(result)
+
+    def test_rejects_latest_battery_drop_hidden_by_good_average(self):
+        for sample in self.samples:
+            sample["BatteryVoltage"] = 27.0
+        self.samples[-1]["BatteryVoltage"] = 26.3
+
+        result = solar_auto_switch.should_switch_to_solar_priority(
+            solar_history=self.samples,
+            current_datetime=self.current_datetime,
+        )
+
+        self.assertFalse(result)
+
+    def test_rejects_latest_pv_drop_hidden_by_good_average(self):
+        for sample in self.samples:
+            sample["PvVoltage"] = 39.0
+        self.samples[-1]["PvVoltage"] = 34.0
+
+        result = solar_auto_switch.should_switch_to_solar_priority(
+            solar_history=self.samples,
+            current_datetime=self.current_datetime,
+        )
+
+        self.assertFalse(result)
+
+    def test_accepts_latest_values_on_hard_limit_boundaries(self):
+        for sample in self.samples:
+            sample["BatteryVoltage"] = 27.0
+            sample["PLoad"] = 100.0
+            sample["PvVoltage"] = 39.0
+
+        self.samples[-1]["BatteryVoltage"] = 26.4
+        self.samples[-1]["PLoad"] = 800.0
+        self.samples[-1]["PvVoltage"] = 35.0
+
+        result = solar_auto_switch.should_switch_to_solar_priority(
+            solar_history=self.samples,
+            current_datetime=self.current_datetime,
+        )
+
+        self.assertTrue(result)
+
+    def test_rejects_invalid_latest_raw_sample(self):
+        invalid_latest_sample = self.samples[-1].copy()
+        invalid_latest_sample["timestamp"] += timedelta(seconds=1)
+        invalid_latest_sample["PLoad"] = None
+
+        result = solar_auto_switch.should_switch_to_solar_priority(
+            solar_history=self.samples + [invalid_latest_sample],
+            current_datetime=self.current_datetime,
+        )
+
+        self.assertFalse(result)
+
+    def test_does_not_apply_latest_hard_limit_to_charger_power(self):
+        for sample in self.samples:
+            sample["ChargerPower"] = 100.0
+        self.samples[-1]["ChargerPower"] = 0.0
+
+        result = solar_auto_switch.should_switch_to_solar_priority(
+            solar_history=self.samples,
+            current_datetime=self.current_datetime,
+        )
+
+        self.assertTrue(result)
 
 
 if __name__ == "__main__":
