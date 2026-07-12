@@ -19,7 +19,7 @@ from config import (
     SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES,
     SOLAR_AUTO_SWITCH_START_TIME,
 )
-from energy_mode_control.solar_windows import is_datetime_in_solar_window
+from energy_mode_control.time_utils import is_time_in_window
 
 
 logger = logging.getLogger(__name__)
@@ -36,10 +36,10 @@ def should_switch_to_solar_priority(
     current_datetime: datetime | None = None,
 ) -> bool:
     """Evaluate whether recent telemetry safely supports solar priority."""
-    if not is_datetime_in_solar_window(
+    if not is_time_in_window(
+        start_time=SOLAR_AUTO_SWITCH_START_TIME,
+        end_time=SOLAR_AUTO_SWITCH_END_TIME,
         current_datetime=current_datetime,
-        start_override=SOLAR_AUTO_SWITCH_START_TIME,
-        end_override=SOLAR_AUTO_SWITCH_END_TIME,
     ):
         logger.info("Solar auto-switch is outside its active time window.")
         return False

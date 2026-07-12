@@ -11,11 +11,6 @@ from typing import Final
 # Third-Party Libraries
 from dotenv import load_dotenv
 
-# Custom Modules
-from energy_mode_control.solar_windows import (
-    validate_solar_window_overrides,
-)
-
 
 load_dotenv()
 
@@ -188,22 +183,6 @@ def get_env_time(variable_name: str, default: str) -> time:
         ) from error
 
 
-def get_env_optional_time(variable_name: str) -> time | None:
-    """Read an optional HH:MM environment variable."""
-    value = os.getenv(variable_name)
-
-    if value is None or not value.strip():
-        return None
-
-    try:
-        return datetime.strptime(value, "%H:%M").time()
-    except ValueError as error:
-        raise ValueError(
-            f"Environment variable {variable_name} "
-            f"must use the HH:MM format"
-        ) from error
-
-
 def get_env_energy_mode(
     variable_name: str,
     default: EnergyMode,
@@ -319,12 +298,14 @@ ENABLE_SOLAR_AUTO_SWITCH: Final[bool] = get_env_bool(
     default=False,
 )
 
-SOLAR_AUTO_SWITCH_START_TIME: Final[time | None] = get_env_optional_time(
+SOLAR_AUTO_SWITCH_START_TIME: Final[time] = get_env_time(
     variable_name="SOLAR_AUTO_SWITCH_START_TIME",
+    default="12:00",
 )
 
-SOLAR_AUTO_SWITCH_END_TIME: Final[time | None] = get_env_optional_time(
+SOLAR_AUTO_SWITCH_END_TIME: Final[time] = get_env_time(
     variable_name="SOLAR_AUTO_SWITCH_END_TIME",
+    default="18:00",
 )
 
 SOLAR_AUTO_SWITCH_TARGET_MODE: Final[EnergyMode] = get_env_energy_mode(
@@ -410,14 +391,10 @@ def validate_configuration() -> None:
             + ", ".join(missing_variables)
         )
 
-    try:
-        validate_solar_window_overrides(
-            start_override=SOLAR_AUTO_SWITCH_START_TIME,
-            end_override=SOLAR_AUTO_SWITCH_END_TIME,
-        )
-    except ValueError as error:
+    if SOLAR_AUTO_SWITCH_START_TIME >= SOLAR_AUTO_SWITCH_END_TIME:
         errors.append(
-            str(error)
+            "SOLAR_AUTO_SWITCH_START_TIME must be earlier than "
+            "SOLAR_AUTO_SWITCH_END_TIME"
         )
 
     if errors:
@@ -443,8 +420,7 @@ def log_startup_configuration() -> None:
         "  Data gathering interval: %s seconds\n"
         "  Scheduled auto-switch: %s; target time: %s; target mode: %s\n"
         "  Grid outage auto-switch: %s; target mode: %s\n"
-        "  Solar auto-switch: %s; window: %s; target mode: %s; "
-        "timezone: Europe/Kyiv\n"
+        "  Solar auto-switch: %s; window: %s-%s; target mode: %s\n"
         "  Solar history: %s minutes; minimum samples: %s; "
         "minimum span: %s minutes\n"
         "  Solar average thresholds: battery >= %s V; "
@@ -481,7 +457,14 @@ def log_startup_configuration() -> None:
             "ENABLE_SOLAR_AUTO_SWITCH",
             _format_bool(ENABLE_SOLAR_AUTO_SWITCH),
         ),
-        _format_solar_window_override(),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_START_TIME",
+            SOLAR_AUTO_SWITCH_START_TIME.strftime("%H:%M"),
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_END_TIME",
+            SOLAR_AUTO_SWITCH_END_TIME.strftime("%H:%M"),
+        ),
         _format_summary_value(
             "SOLAR_AUTO_SWITCH_TARGET_MODE",
             SOLAR_AUTO_SWITCH_TARGET_MODE.name,
@@ -539,27 +522,6 @@ def _format_summary_value(variable_name: str, value: object) -> str:
 
 def _format_bool(value: bool) -> str:
     return str(value).lower()
-
-
-def _format_solar_window_override() -> str:
-    if (
-        SOLAR_AUTO_SWITCH_START_TIME is None
-        and SOLAR_AUTO_SWITCH_END_TIME is None
-    ):
-        return "automatic seasonal"
-
-    start_value = (
-        SOLAR_AUTO_SWITCH_START_TIME.strftime("%H:%M")
-        if SOLAR_AUTO_SWITCH_START_TIME is not None
-        else "automatic seasonal start"
-    )
-    end_value = (
-        SOLAR_AUTO_SWITCH_END_TIME.strftime("%H:%M")
-        if SOLAR_AUTO_SWITCH_END_TIME is not None
-        else "automatic seasonal end"
-    )
-
-    return f"{start_value}-{end_value}"
 
 
 if __name__ == '__main__':
