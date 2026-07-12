@@ -2,7 +2,6 @@
 
 # Standard Libraries
 import logging
-import os
 from typing import Final, Optional
 
 # Third-party Libraries
@@ -14,8 +13,16 @@ from config import (
     ENABLE_AUTO_SWITCH,
     ENABLE_GRID_OUTAGE_AUTO_SWITCH,
     ENABLE_SOLAR_AUTO_SWITCH,
+    ConfigurationError,
     MUST_PORT,
+    MYSQL_DATABASE,
+    MYSQL_HOST,
+    MYSQL_PASSWORD,
+    MYSQL_PORT,
+    MYSQL_USER,
     SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES,
+    log_startup_configuration,
+    validate_configuration,
 )
 from energy_mode_control.energy_mode_controller import (
     handle_energy_mode_control,
@@ -120,8 +127,14 @@ class MustInverterDataHandler:
 
 def main():
     configure_logging()
+    try:
+        validate_configuration()
+    except ConfigurationError as error:
+        logger.critical("Configuration validation failed: %s", error)
+        raise SystemExit(1) from error
+
+    log_startup_configuration()
     logger.info("Initializing project.")
-    load_dotenv()  # load vars from .env into our environment
 
     # 1. Create instance of class MustInverterDataHandler
     must_inverter_data_handler = MustInverterDataHandler()
@@ -130,10 +143,11 @@ def main():
     logger.info("Connecting to MySQL, it may take some time, please wait...")
     mysql_connection_handler = MysqlConnectionHandler()
     mysql_connection_handler.initialize_connection(
-        db_host=os.getenv("MYSQL_HOST", "localhost"),
-        db_name=os.getenv("MYSQL_DATABASE", "must_data"),
-        db_user=os.getenv("MYSQL_USER", "root"),
-        db_password=os.getenv("MYSQL_PASSWORD", ""),
+        db_host=MYSQL_HOST,
+        db_name=MYSQL_DATABASE,
+        db_user=MYSQL_USER,
+        db_password=MYSQL_PASSWORD,
+        db_port=MYSQL_PORT,
         pool_name="must_python_worker",
         pool_size=2
     )

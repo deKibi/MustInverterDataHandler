@@ -24,6 +24,7 @@ class MysqlConnectionHandler:
             db_name: str,
             db_user: str,
             db_password: str,
+            db_port: int,
             pool_name:str,
             pool_size: int
     ) -> Optional[MySQLConnectionPool]:
@@ -33,6 +34,7 @@ class MysqlConnectionHandler:
                 database=db_name,
                 user=db_user,
                 password=db_password,
+                port=db_port,
                 pool_name=pool_name,
                 pool_size=pool_size
             )

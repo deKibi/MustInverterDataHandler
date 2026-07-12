@@ -16,6 +16,25 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+_configuration_warnings: list[str] = []
+_defaulted_variables: set[str] = set()
+_startup_configuration_logged = False
+
+
+class ConfigurationError(ValueError):
+    """Raised when required application configuration is missing."""
+
+
+def _record_default(variable_name: str, default: object) -> None:
+    _defaulted_variables.add(variable_name)
+    _configuration_warnings.append(
+        f"{variable_name} is not configured; using {default} default."
+    )
+
+
+def _record_warning(message: str) -> None:
+    _configuration_warnings.append(message)
+
 
 class EnergyMode(IntEnum):
     """
@@ -36,7 +55,8 @@ def get_env_bool(variable_name: str, default: bool = False) -> bool:
     """
     value = os.getenv(variable_name)
 
-    if value is None:
+    if value is None or not value.strip():
+        _record_default(variable_name, str(default).lower())
         return default
 
     normalized_value = value.strip().lower()
@@ -68,35 +88,30 @@ def get_env_int(
     """
     raw_value = os.getenv(variable_name)
 
-    if raw_value is None:
+    if raw_value is None or not raw_value.strip():
+        _record_default(variable_name, default)
         return default
 
     try:
         value = int(raw_value.strip())
     except (TypeError, ValueError):
-        logger.warning(
-            "Invalid value for %s: %r. Using default value: %s.",
-            variable_name,
-            raw_value,
-            default,
+        _record_warning(
+            f"Invalid value for {variable_name}: {raw_value!r}. "
+            f"Using default value: {default}."
         )
         return default
 
     if min_value is not None and value < min_value:
-        logger.warning(
-            "%s is below the minimum value of %s. Using %s.",
-            variable_name,
-            min_value,
-            min_value,
+        _record_warning(
+            f"{variable_name} is below the minimum value of {min_value}. "
+            f"Using {min_value}."
         )
         return min_value
 
     if max_value is not None and value > max_value:
-        logger.warning(
-            "%s is above the maximum value of %s. Using %s.",
-            variable_name,
-            max_value,
-            max_value,
+        _record_warning(
+            f"{variable_name} is above the maximum value of {max_value}. "
+            f"Using {max_value}."
         )
         return max_value
 
@@ -112,44 +127,37 @@ def get_env_float(
     """Read and optionally limit a floating-point environment variable."""
     raw_value = os.getenv(variable_name)
 
-    if raw_value is None:
+    if raw_value is None or not raw_value.strip():
+        _record_default(variable_name, default)
         return default
 
     try:
         value = float(raw_value.strip())
     except (TypeError, ValueError):
-        logger.warning(
-            "Invalid value for %s: %r. Using default value: %s.",
-            variable_name,
-            raw_value,
-            default,
+        _record_warning(
+            f"Invalid value for {variable_name}: {raw_value!r}. "
+            f"Using default value: {default}."
         )
         return default
 
     if not math.isfinite(value):
-        logger.warning(
-            "Invalid value for %s: %r. Using default value: %s.",
-            variable_name,
-            raw_value,
-            default,
+        _record_warning(
+            f"Invalid value for {variable_name}: {raw_value!r}. "
+            f"Using default value: {default}."
         )
         return default
 
     if min_value is not None and value < min_value:
-        logger.warning(
-            "%s is below the minimum value of %s. Using %s.",
-            variable_name,
-            min_value,
-            min_value,
+        _record_warning(
+            f"{variable_name} is below the minimum value of {min_value}. "
+            f"Using {min_value}."
         )
         return min_value
 
     if max_value is not None and value > max_value:
-        logger.warning(
-            "%s is above the maximum value of %s. Using %s.",
-            variable_name,
-            max_value,
-            max_value,
+        _record_warning(
+            f"{variable_name} is above the maximum value of {max_value}. "
+            f"Using {max_value}."
         )
         return max_value
 
@@ -160,7 +168,11 @@ def get_env_time(variable_name: str, default: str) -> time:
     """
     Read an environment variable in HH:MM format and convert it to time.
     """
-    value = os.getenv(variable_name, default)
+    value = os.getenv(variable_name)
+
+    if value is None or not value.strip():
+        _record_default(variable_name, default)
+        value = default
 
     try:
         return datetime.strptime(value, "%H:%M").time()
@@ -178,7 +190,13 @@ def get_env_energy_mode(
     """
     Read an energy mode name and convert it to EnergyMode.
     """
-    value = os.getenv(variable_name, default.name).strip().upper()
+    value = os.getenv(variable_name)
+
+    if value is None or not value.strip():
+        _record_default(variable_name, default.name)
+        value = default.name
+
+    value = value.strip().upper()
 
     try:
         return EnergyMode[value]
@@ -191,7 +209,51 @@ def get_env_energy_mode(
         ) from error
 
 
-MUST_PORT: Final[str] = os.getenv("MUST_PORT", "COM3")
+def get_env_string(variable_name: str, default: str) -> str:
+    """Read a string environment variable or record its default."""
+    value = os.getenv(variable_name)
+
+    if value is None or not value.strip():
+        _record_default(variable_name, default)
+        return default
+
+    return value
+
+
+def get_env_port(variable_name: str, default: int) -> int:
+    """Read a TCP port, using the default for missing or invalid values."""
+    raw_value = os.getenv(variable_name)
+
+    if raw_value is None or not raw_value.strip():
+        _record_default(variable_name, default)
+        return default
+
+    try:
+        value = int(raw_value.strip())
+    except (TypeError, ValueError):
+        _record_warning(
+            f"Invalid value for {variable_name}: {raw_value!r}. "
+            f"Using default value: {default}."
+        )
+        return default
+
+    if not 1 <= value <= 65535:
+        _record_warning(
+            f"{variable_name} must be between 1 and 65535. "
+            f"Using default value: {default}."
+        )
+        return default
+
+    return value
+
+
+MYSQL_HOST: Final[str | None] = os.getenv("MYSQL_HOST")
+MYSQL_DATABASE: Final[str | None] = os.getenv("MYSQL_DATABASE")
+MYSQL_USER: Final[str | None] = os.getenv("MYSQL_USER")
+MYSQL_PASSWORD: Final[str | None] = os.getenv("MYSQL_PASSWORD")
+MYSQL_PORT: Final[int] = get_env_port("MYSQL_PORT", 3306)
+
+MUST_PORT: Final[str] = get_env_string("MUST_PORT", "COM3")
 
 DATA_GATHER_INTERVAL_SECONDS: Final[int] = get_env_int(
     variable_name="DATA_GATHER_INTERVAL_SECONDS",
@@ -245,12 +307,6 @@ SOLAR_AUTO_SWITCH_END_TIME: Final[time] = get_env_time(
     variable_name="SOLAR_AUTO_SWITCH_END_TIME",
     default="18:00",
 )
-
-if SOLAR_AUTO_SWITCH_START_TIME >= SOLAR_AUTO_SWITCH_END_TIME:
-    raise ValueError(
-        "SOLAR_AUTO_SWITCH_START_TIME must be earlier than "
-        "SOLAR_AUTO_SWITCH_END_TIME"
-    )
 
 SOLAR_AUTO_SWITCH_TARGET_MODE: Final[EnergyMode] = get_env_energy_mode(
     variable_name="SOLAR_AUTO_SWITCH_TARGET_MODE",
@@ -312,6 +368,160 @@ SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE: Final[float] = get_env_float(
     default=35.0,
     min_value=0.0,
 )
+
+
+def validate_configuration() -> None:
+    """Validate required settings before hardware or database startup."""
+    required_mysql_values = {
+        "MYSQL_HOST": MYSQL_HOST,
+        "MYSQL_DATABASE": MYSQL_DATABASE,
+        "MYSQL_USER": MYSQL_USER,
+        "MYSQL_PASSWORD": MYSQL_PASSWORD,
+    }
+    missing_variables = [
+        variable_name
+        for variable_name, value in required_mysql_values.items()
+        if value is None or not value.strip()
+    ]
+    errors = []
+
+    if missing_variables:
+        errors.append(
+            "Missing required environment variables: "
+            + ", ".join(missing_variables)
+        )
+
+    if SOLAR_AUTO_SWITCH_START_TIME >= SOLAR_AUTO_SWITCH_END_TIME:
+        errors.append(
+            "SOLAR_AUTO_SWITCH_START_TIME must be earlier than "
+            "SOLAR_AUTO_SWITCH_END_TIME"
+        )
+
+    if errors:
+        raise ConfigurationError("; ".join(errors))
+
+
+def log_startup_configuration() -> None:
+    """Log a safe startup summary and deferred warnings exactly once."""
+    global _startup_configuration_logged
+
+    if _startup_configuration_logged:
+        return
+
+    logger.info("Configuration loaded and validated.")
+    logger.info(
+        "Startup configuration:\n"
+        "  MySQL host: configured\n"
+        "  MySQL database: configured\n"
+        "  MySQL user: configured\n"
+        "  MySQL password: configured\n"
+        "  MySQL port: %s\n"
+        "  Inverter serial port: %s\n"
+        "  Data gathering interval: %s seconds\n"
+        "  Scheduled auto-switch: %s; target time: %s; target mode: %s\n"
+        "  Grid outage auto-switch: %s; target mode: %s\n"
+        "  Solar auto-switch: %s; window: %s-%s; target mode: %s\n"
+        "  Solar history: %s minutes; minimum samples: %s; "
+        "minimum span: %s minutes\n"
+        "  Solar average thresholds: battery >= %s V; "
+        "load <= %s W; PV >= %s V\n"
+        "  Solar latest limits: battery >= %s V; "
+        "load <= %s W; PV >= %s V.",
+        _format_summary_value("MYSQL_PORT", MYSQL_PORT),
+        _format_summary_value("MUST_PORT", MUST_PORT),
+        _format_summary_value(
+            "DATA_GATHER_INTERVAL_SECONDS",
+            DATA_GATHER_INTERVAL_SECONDS,
+        ),
+        _format_summary_value(
+            "ENABLE_AUTO_SWITCH",
+            _format_bool(ENABLE_AUTO_SWITCH),
+        ),
+        _format_summary_value(
+            "AUTO_SWITCH_TARGET_TIME",
+            AUTO_SWITCH_TARGET_TIME.strftime("%H:%M"),
+        ),
+        _format_summary_value(
+            "AUTO_SWITCH_TARGET_MODE",
+            AUTO_SWITCH_TARGET_MODE.name,
+        ),
+        _format_summary_value(
+            "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
+            _format_bool(ENABLE_GRID_OUTAGE_AUTO_SWITCH),
+        ),
+        _format_summary_value(
+            "GRID_OUTAGE_TARGET_MODE",
+            GRID_OUTAGE_TARGET_MODE.name,
+        ),
+        _format_summary_value(
+            "ENABLE_SOLAR_AUTO_SWITCH",
+            _format_bool(ENABLE_SOLAR_AUTO_SWITCH),
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_START_TIME",
+            SOLAR_AUTO_SWITCH_START_TIME.strftime("%H:%M"),
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_END_TIME",
+            SOLAR_AUTO_SWITCH_END_TIME.strftime("%H:%M"),
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_TARGET_MODE",
+            SOLAR_AUTO_SWITCH_TARGET_MODE.name,
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES",
+            SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES,
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES",
+            SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES,
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES",
+            SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES,
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE",
+            SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE,
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER",
+            SOLAR_AUTO_SWITCH_MAX_LOAD_POWER,
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE",
+            SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE,
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE",
+            SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE,
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER",
+            SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER,
+        ),
+        _format_summary_value(
+            "SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE",
+            SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE,
+        ),
+    )
+
+    for warning_message in _configuration_warnings:
+        logger.warning(warning_message)
+
+    _startup_configuration_logged = True
+
+
+def _format_summary_value(variable_name: str, value: object) -> str:
+    if variable_name in _defaulted_variables:
+        return f"not configured (using {value} default)"
+
+    return str(value)
+
+
+def _format_bool(value: bool) -> str:
+    return str(value).lower()
 
 
 if __name__ == '__main__':
