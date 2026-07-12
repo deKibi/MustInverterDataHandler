@@ -18,9 +18,8 @@ class SolarAutoSwitchTestCase(unittest.TestCase):
                 - timedelta(minutes=5)
                 + timedelta(seconds=index * (300 / 7)),
                 "BatteryVoltage": 26.8,
-                "PLoad": 400.0,
+                "PLoad": 700.0,
                 "PvVoltage": 38.0,
-                "ChargerPower": 80.0,
             }
             for index in range(8)
         ]
@@ -30,9 +29,8 @@ class SolarAutoSwitchTestCase(unittest.TestCase):
             SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES=8,
             SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES=5,
             SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE=26.8,
-            SOLAR_AUTO_SWITCH_MAX_LOAD_POWER=400.0,
+            SOLAR_AUTO_SWITCH_MAX_LOAD_POWER=700.0,
             SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE=38.0,
-            SOLAR_AUTO_SWITCH_MIN_CHARGER_POWER=80.0,
             SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE=26.4,
             SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER=800.0,
             SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE=35.0,
@@ -86,9 +84,8 @@ class SolarAutoSwitchTestCase(unittest.TestCase):
     def test_rejects_when_any_average_misses_its_threshold(self):
         threshold_fields = {
             "BatteryVoltage": 26.7,
-            "PLoad": 401.0,
+            "PLoad": 701.0,
             "PvVoltage": 37.9,
-            "ChargerPower": 79.0,
         }
 
         for field, invalid_value in threshold_fields.items():
@@ -117,7 +114,7 @@ class SolarAutoSwitchTestCase(unittest.TestCase):
         self.assertLess(
             sum(sample["PLoad"] for sample in self.samples)
             / len(self.samples),
-            400.0,
+            700.0,
         )
         self.assertFalse(result)
 
@@ -174,10 +171,12 @@ class SolarAutoSwitchTestCase(unittest.TestCase):
 
         self.assertFalse(result)
 
-    def test_does_not_apply_latest_hard_limit_to_charger_power(self):
+    def test_accepts_sub_mode_conditions_with_low_charger_power(self):
         for sample in self.samples:
-            sample["ChargerPower"] = 100.0
-        self.samples[-1]["ChargerPower"] = 0.0
+            sample["BatteryVoltage"] = 27.1
+            sample["PLoad"] = 595.0
+            sample["PvVoltage"] = 43.7
+            sample["ChargerPower"] = 8.0
 
         result = solar_auto_switch.should_switch_to_solar_priority(
             solar_history=self.samples,

@@ -12,7 +12,6 @@ from config import (
     SOLAR_AUTO_SWITCH_MAX_LOAD_POWER,
     SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER,
     SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE,
-    SOLAR_AUTO_SWITCH_MIN_CHARGER_POWER,
     SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE,
     SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE,
     SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE,
@@ -29,7 +28,6 @@ REQUIRED_TELEMETRY_FIELDS = (
     "BatteryVoltage",
     "PLoad",
     "PvVoltage",
-    "ChargerPower",
 )
 
 
@@ -112,18 +110,14 @@ def should_switch_to_solar_priority(
         >= SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE
         and averages["PLoad"] <= SOLAR_AUTO_SWITCH_MAX_LOAD_POWER
         and averages["PvVoltage"] >= SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE
-        and averages["ChargerPower"]
-        >= SOLAR_AUTO_SWITCH_MIN_CHARGER_POWER
     )
 
     logger.info(
         "Solar auto-switch averages: BatteryVoltage=%.2f V, "
-        "PLoad=%.2f W, PvVoltage=%.2f V, ChargerPower=%.2f W; "
-        "conditions met: %s.",
+        "PLoad=%.2f W, PvVoltage=%.2f V; conditions met: %s.",
         averages["BatteryVoltage"],
         averages["PLoad"],
         averages["PvVoltage"],
-        averages["ChargerPower"],
         conditions_met,
     )
 

@@ -158,8 +158,8 @@ class MustDataTable:
     ) -> list[dict]:
         """Return recent telemetry fields needed by the solar switch rule."""
         sql = (
-            f"SELECT timestamp, BatteryVoltage, PLoad, PvVoltage, "
-            f"ChargerPower FROM {self._table_name} "
+            f"SELECT timestamp, BatteryVoltage, PLoad, PvVoltage "
+            f"FROM {self._table_name} "
             f"WHERE timestamp >= DATE_SUB(NOW(), INTERVAL %s MINUTE) "
             f"ORDER BY timestamp ASC"
         )

@@ -28,6 +28,9 @@ class MustDataTableTestCase(unittest.TestCase):
         self.assertEqual(rows, result)
         connection.cursor.assert_called_once_with(dictionary=True)
         cursor.execute.assert_called_once()
+        executed_sql = cursor.execute.call_args.args[0]
+        self.assertIn("BatteryVoltage, PLoad, PvVoltage", executed_sql)
+        self.assertNotIn("ChargerPower", executed_sql)
         self.assertEqual((10,), cursor.execute.call_args.args[1])
         cursor.close.assert_called_once_with()
 

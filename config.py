@@ -285,19 +285,13 @@ SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE: Final[float] = get_env_float(
 
 SOLAR_AUTO_SWITCH_MAX_LOAD_POWER: Final[float] = get_env_float(
     variable_name="SOLAR_AUTO_SWITCH_MAX_LOAD_POWER",
-    default=400.0,
+    default=700.0,
     min_value=0.0,
 )
 
 SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE: Final[float] = get_env_float(
     variable_name="SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE",
     default=38.0,
-    min_value=0.0,
-)
-
-SOLAR_AUTO_SWITCH_MIN_CHARGER_POWER: Final[float] = get_env_float(
-    variable_name="SOLAR_AUTO_SWITCH_MIN_CHARGER_POWER",
-    default=80.0,
     min_value=0.0,
 )
 
