@@ -13,13 +13,15 @@ from config import (
     AUTO_SWITCH_TARGET_TIME,
     ENABLE_GRID_OUTAGE_AUTO_SWITCH,
     GRID_OUTAGE_TARGET_MODE,
+    SOLAR_AUTO_SWITCH_END_TIME,
+    SOLAR_AUTO_SWITCH_START_TIME,
     SOLAR_AUTO_SWITCH_TARGET_MODE,
     EnergyMode
 )
 from energy_mode_control.solar_auto_switch import (
     should_switch_to_solar_priority,
 )
-from energy_mode_control.time_utils import is_time_reached
+from energy_mode_control.time_utils import is_time_in_window, is_time_reached
 from energy_mode_control.energy_mode_switcher import (
     switch_energy_mode,
 )
@@ -117,6 +119,13 @@ def _handle_energy_mode_control(
         ENABLE_AUTO_SWITCH
         and is_grid_available
         and is_time_reached(AUTO_SWITCH_TARGET_TIME)
+        and (
+            not ENABLE_SOLAR_AUTO_SWITCH
+            or not is_time_in_window(
+                start_time=SOLAR_AUTO_SWITCH_START_TIME,
+                end_time=SOLAR_AUTO_SWITCH_END_TIME,
+            )
+        )
     ):
         target_mode = AUTO_SWITCH_TARGET_MODE
         switch_reason = "auto-switch target time has been reached"

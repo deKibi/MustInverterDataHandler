@@ -130,6 +130,7 @@ def test_scheduled_rule_has_priority_over_solar(monkeypatch, must_data):
     solar_mock = Mock(return_value=True)
     monkeypatch.setattr(controller, "AUTO_SWITCH_TARGET_MODE", EnergyMode.UTI)
     monkeypatch.setattr(controller, "is_time_reached", Mock(return_value=True))
+    monkeypatch.setattr(controller, "is_time_in_window", Mock(return_value=False))
     monkeypatch.setattr(controller, "should_switch_to_solar_priority", solar_mock)
     monkeypatch.setattr(controller, "switch_energy_mode", switch_mock)
 
@@ -138,6 +139,62 @@ def test_scheduled_rule_has_priority_over_solar(monkeypatch, must_data):
     assert result is True
     switch_mock.assert_called_once_with(target_mode=EnergyMode.UTI)
     solar_mock.assert_not_called()
+
+
+def test_scheduled_switch_is_blocked_inside_solar_window(
+    monkeypatch,
+    must_data,
+):
+    configure_rules(monkeypatch, scheduled=True, solar=True)
+    switch_mock = Mock()
+    solar_mock = Mock(return_value=False)
+    monkeypatch.setattr(controller, "AUTO_SWITCH_TARGET_MODE", EnergyMode.UTI)
+    monkeypatch.setattr(controller, "is_time_reached", Mock(return_value=True))
+    monkeypatch.setattr(controller, "is_time_in_window", Mock(return_value=True))
+    monkeypatch.setattr(controller, "should_switch_to_solar_priority", solar_mock)
+    monkeypatch.setattr(controller, "switch_energy_mode", switch_mock)
+
+    result = controller.handle_energy_mode_control(must_data, solar_history=[])
+
+    assert result is False
+    solar_mock.assert_called_once_with([])
+    switch_mock.assert_not_called()
+
+
+def test_scheduled_switch_is_allowed_at_solar_window_end(
+    monkeypatch,
+    must_data,
+):
+    configure_rules(monkeypatch, scheduled=True, solar=True)
+    switch_mock = Mock()
+    monkeypatch.setattr(controller, "AUTO_SWITCH_TARGET_MODE", EnergyMode.UTI)
+    monkeypatch.setattr(controller, "is_time_reached", Mock(return_value=True))
+    monkeypatch.setattr(controller, "is_time_in_window", Mock(return_value=False))
+    monkeypatch.setattr(controller, "switch_energy_mode", switch_mock)
+
+    result = controller.handle_energy_mode_control(must_data)
+
+    assert result is True
+    switch_mock.assert_called_once_with(target_mode=EnergyMode.UTI)
+
+
+def test_scheduled_switch_is_unchanged_when_solar_is_disabled(
+    monkeypatch,
+    must_data,
+):
+    configure_rules(monkeypatch, scheduled=True, solar=False)
+    switch_mock = Mock()
+    window_mock = Mock(return_value=True)
+    monkeypatch.setattr(controller, "AUTO_SWITCH_TARGET_MODE", EnergyMode.UTI)
+    monkeypatch.setattr(controller, "is_time_reached", Mock(return_value=True))
+    monkeypatch.setattr(controller, "is_time_in_window", window_mock)
+    monkeypatch.setattr(controller, "switch_energy_mode", switch_mock)
+
+    result = controller.handle_energy_mode_control(must_data)
+
+    assert result is True
+    window_mock.assert_not_called()
+    switch_mock.assert_called_once_with(target_mode=EnergyMode.UTI)
 
 
 def test_solar_rule_switches_only_from_sub(monkeypatch, must_data):
