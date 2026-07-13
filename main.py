@@ -12,6 +12,7 @@ from config import (
     DATA_GATHER_INTERVAL_SECONDS,
     ENABLE_AUTO_SWITCH,
     ENABLE_GRID_OUTAGE_AUTO_SWITCH,
+    ENABLE_INVERTER_CONTROL,
     ENABLE_SOLAR_AUTO_SWITCH,
     ConfigurationError,
     MUST_PORT,
@@ -161,12 +162,13 @@ def main():
         "Data gathering interval is set to: %s seconds.",
         DATA_GATHER_INTERVAL_SECONDS,
     )
-    if ENABLE_AUTO_SWITCH:
-        logger.info("Time-based energy mode auto-switch is enabled.")
-    if ENABLE_GRID_OUTAGE_AUTO_SWITCH:
-        logger.info("Grid outage energy mode auto-switch is enabled.")
-    if ENABLE_SOLAR_AUTO_SWITCH:
-        logger.info("Solar priority energy mode auto-switch is enabled.")
+    if ENABLE_INVERTER_CONTROL:
+        if ENABLE_AUTO_SWITCH:
+            logger.info("Time-based energy mode auto-switch is enabled.")
+        if ENABLE_GRID_OUTAGE_AUTO_SWITCH:
+            logger.info("Grid outage energy mode auto-switch is enabled.")
+        if ENABLE_SOLAR_AUTO_SWITCH:
+            logger.info("Solar priority energy mode auto-switch is enabled.")
 
     while True:
         # 1. Get data
@@ -178,28 +180,29 @@ def main():
             must_data_table.insert_data(data=must_data)
             logger.info("Data inserted into the database.")
 
-            # 3. Handle optional energy mode control
-            solar_history = None
+            if ENABLE_INVERTER_CONTROL:
+                # 3. Handle optional energy mode control
+                solar_history = None
 
-            if ENABLE_SOLAR_AUTO_SWITCH:
-                try:
-                    solar_history = (
-                        must_data_table.get_recent_solar_switch_data(
-                            lookback_minutes=(
-                                SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES
-                            ),
+                if ENABLE_SOLAR_AUTO_SWITCH:
+                    try:
+                        solar_history = (
+                            must_data_table.get_recent_solar_switch_data(
+                                lookback_minutes=(
+                                    SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES
+                                ),
+                            )
                         )
-                    )
-                except Exception as error:
-                    logger.exception(
-                        "Unable to read solar auto-switch history: %s",
-                        error,
-                    )
+                    except Exception as error:
+                        logger.exception(
+                            "Unable to read solar auto-switch history: %s",
+                            error,
+                        )
 
-            handle_energy_mode_control(
-                must_data=must_data,
-                solar_history=solar_history,
-            )
+                handle_energy_mode_control(
+                    must_data=must_data,
+                    solar_history=solar_history,
+                )
         else:
             logger.warning("Unable to get data from the inverter.")
 

@@ -8,7 +8,7 @@ from datetime import datetime, time
 from enum import IntEnum
 from typing import Final
 
-# Third-Party Libraries
+# Third-party Libraries
 from dotenv import load_dotenv
 
 
@@ -21,9 +21,16 @@ _defaulted_variables: set[str] = set()
 _startup_configuration_logged = False
 
 _INFO_ONLY_DEFAULT_VARIABLES: Final[frozenset[str]] = frozenset({
+    "ENABLE_INVERTER_CONTROL",
     "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
     "ENABLE_SOLAR_AUTO_SWITCH",
 })
+
+_SCHEDULED_SETTING_VARIABLES: Final[tuple[str, ...]] = (
+    "ENABLE_AUTO_SWITCH",
+    "AUTO_SWITCH_TARGET_TIME",
+    "AUTO_SWITCH_TARGET_MODE",
+)
 
 _GRID_OUTAGE_SETTING_VARIABLES: Final[tuple[str, ...]] = (
     "GRID_OUTAGE_TARGET_MODE",
@@ -42,6 +49,14 @@ _SOLAR_SETTING_VARIABLES: Final[tuple[str, ...]] = (
     "SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE",
     "SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER",
     "SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE",
+)
+
+_INVERTER_CONTROL_SETTING_VARIABLES: Final[tuple[str, ...]] = (
+    *_SCHEDULED_SETTING_VARIABLES,
+    "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
+    *_GRID_OUTAGE_SETTING_VARIABLES,
+    "ENABLE_SOLAR_AUTO_SWITCH",
+    *_SOLAR_SETTING_VARIABLES,
 )
 
 
@@ -93,6 +108,27 @@ def get_env_bool(variable_name: str, default: bool = False) -> bool:
         return True
 
     if normalized_value in {"false", "0", "no", "off"}:
+        return False
+
+    raise ValueError(
+        f"Environment variable {variable_name} must contain true or false"
+    )
+
+
+def get_env_inverter_control(variable_name: str) -> bool:
+    """Enable inverter control only for an explicit true value."""
+    value = os.getenv(variable_name)
+
+    if value is None or not value.strip():
+        _record_default(variable_name, "false")
+        return False
+
+    normalized_value = value.strip().lower()
+
+    if normalized_value == "true":
+        return True
+
+    if normalized_value == "false":
         return False
 
     raise ValueError(
@@ -290,19 +326,35 @@ DATA_GATHER_INTERVAL_SECONDS: Final[int] = get_env_int(
     max_value=3600,
 )
 
-ENABLE_AUTO_SWITCH: Final[bool] = get_env_bool(
-    variable_name="ENABLE_AUTO_SWITCH",
-    default=False,
+ENABLE_INVERTER_CONTROL: Final[bool] = get_env_inverter_control(
+    variable_name="ENABLE_INVERTER_CONTROL",
 )
 
-AUTO_SWITCH_TARGET_TIME: Final[time] = get_env_time(
-    variable_name="AUTO_SWITCH_TARGET_TIME",
-    default="20:00",
+ENABLE_AUTO_SWITCH: Final[bool] = (
+    get_env_bool(
+        variable_name="ENABLE_AUTO_SWITCH",
+        default=False,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else False
 )
 
-AUTO_SWITCH_TARGET_MODE: Final[EnergyMode] = get_env_energy_mode(
-    variable_name="AUTO_SWITCH_TARGET_MODE",
-    default=EnergyMode.SUB,
+AUTO_SWITCH_TARGET_TIME: Final[time] = (
+    get_env_time(
+        variable_name="AUTO_SWITCH_TARGET_TIME",
+        default="20:00",
+    )
+    if ENABLE_INVERTER_CONTROL
+    else time(hour=20)
+)
+
+AUTO_SWITCH_TARGET_MODE: Final[EnergyMode] = (
+    get_env_energy_mode(
+        variable_name="AUTO_SWITCH_TARGET_MODE",
+        default=EnergyMode.SUB,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else EnergyMode.SUB
 )
 
 # Grid outage automatic mode switch
@@ -311,6 +363,8 @@ ENABLE_GRID_OUTAGE_AUTO_SWITCH: Final[bool] = (
         variable_name="ENABLE_GRID_OUTAGE_AUTO_SWITCH",
         default=False,
     )
+    if ENABLE_INVERTER_CONTROL
+    else False
 )
 
 GRID_OUTAGE_TARGET_MODE: Final[EnergyMode] = (
@@ -318,83 +372,137 @@ GRID_OUTAGE_TARGET_MODE: Final[EnergyMode] = (
         variable_name="GRID_OUTAGE_TARGET_MODE",
         default=EnergyMode.SUB,
     )
+    if ENABLE_INVERTER_CONTROL
+    else EnergyMode.SUB
 )
 
 # Solar priority automatic mode switch
-ENABLE_SOLAR_AUTO_SWITCH: Final[bool] = get_env_bool(
-    variable_name="ENABLE_SOLAR_AUTO_SWITCH",
-    default=False,
+ENABLE_SOLAR_AUTO_SWITCH: Final[bool] = (
+    get_env_bool(
+        variable_name="ENABLE_SOLAR_AUTO_SWITCH",
+        default=False,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else False
 )
 
-SOLAR_AUTO_SWITCH_START_TIME: Final[time] = get_env_time(
-    variable_name="SOLAR_AUTO_SWITCH_START_TIME",
-    default="12:00",
+SOLAR_AUTO_SWITCH_START_TIME: Final[time] = (
+    get_env_time(
+        variable_name="SOLAR_AUTO_SWITCH_START_TIME",
+        default="12:00",
+    )
+    if ENABLE_INVERTER_CONTROL
+    else time(hour=12)
 )
 
-SOLAR_AUTO_SWITCH_END_TIME: Final[time] = get_env_time(
-    variable_name="SOLAR_AUTO_SWITCH_END_TIME",
-    default="18:00",
+SOLAR_AUTO_SWITCH_END_TIME: Final[time] = (
+    get_env_time(
+        variable_name="SOLAR_AUTO_SWITCH_END_TIME",
+        default="18:00",
+    )
+    if ENABLE_INVERTER_CONTROL
+    else time(hour=18)
 )
 
-SOLAR_AUTO_SWITCH_TARGET_MODE: Final[EnergyMode] = get_env_energy_mode(
-    variable_name="SOLAR_AUTO_SWITCH_TARGET_MODE",
-    default=EnergyMode.SBU,
+SOLAR_AUTO_SWITCH_TARGET_MODE: Final[EnergyMode] = (
+    get_env_energy_mode(
+        variable_name="SOLAR_AUTO_SWITCH_TARGET_MODE",
+        default=EnergyMode.SBU,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else EnergyMode.SBU
 )
 
-SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES: Final[int] = get_env_int(
-    variable_name="SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES",
-    default=10,
-    min_value=1,
-    max_value=1440,
+SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES: Final[int] = (
+    get_env_int(
+        variable_name="SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES",
+        default=10,
+        min_value=1,
+        max_value=1440,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else 10
 )
 
-SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES: Final[int] = get_env_int(
-    variable_name="SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES",
-    default=8,
-    min_value=2,
+SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES: Final[int] = (
+    get_env_int(
+        variable_name="SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES",
+        default=8,
+        min_value=2,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else 8
 )
 
-SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES: Final[int] = get_env_int(
-    variable_name="SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES",
-    default=5,
-    min_value=1,
-    max_value=SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES,
+SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES: Final[int] = (
+    get_env_int(
+        variable_name="SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES",
+        default=5,
+        min_value=1,
+        max_value=SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else 5
 )
 
-SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE: Final[float] = get_env_float(
-    variable_name="SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE",
-    default=26.8,
-    min_value=0.0,
+SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE: Final[float] = (
+    get_env_float(
+        variable_name="SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE",
+        default=26.8,
+        min_value=0.0,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else 26.8
 )
 
-SOLAR_AUTO_SWITCH_MAX_LOAD_POWER: Final[float] = get_env_float(
-    variable_name="SOLAR_AUTO_SWITCH_MAX_LOAD_POWER",
-    default=400.0,
-    min_value=0.0,
+SOLAR_AUTO_SWITCH_MAX_LOAD_POWER: Final[float] = (
+    get_env_float(
+        variable_name="SOLAR_AUTO_SWITCH_MAX_LOAD_POWER",
+        default=400.0,
+        min_value=0.0,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else 400.0
 )
 
-SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE: Final[float] = get_env_float(
-    variable_name="SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE",
-    default=38.0,
-    min_value=0.0,
+SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE: Final[float] = (
+    get_env_float(
+        variable_name="SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE",
+        default=38.0,
+        min_value=0.0,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else 38.0
 )
 
-SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE: Final[float] = get_env_float(
-    variable_name="SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE",
-    default=26.4,
-    min_value=0.0,
+SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE: Final[float] = (
+    get_env_float(
+        variable_name="SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE",
+        default=26.4,
+        min_value=0.0,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else 26.4
 )
 
-SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER: Final[float] = get_env_float(
-    variable_name="SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER",
-    default=500.0,
-    min_value=0.0,
+SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER: Final[float] = (
+    get_env_float(
+        variable_name="SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER",
+        default=500.0,
+        min_value=0.0,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else 500.0
 )
 
-SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE: Final[float] = get_env_float(
-    variable_name="SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE",
-    default=35.0,
-    min_value=0.0,
+SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE: Final[float] = (
+    get_env_float(
+        variable_name="SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE",
+        default=35.0,
+        min_value=0.0,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else 35.0
 )
 
 
@@ -419,7 +527,10 @@ def validate_configuration() -> None:
             + ", ".join(missing_variables)
         )
 
-    if SOLAR_AUTO_SWITCH_START_TIME >= SOLAR_AUTO_SWITCH_END_TIME:
+    if (
+        ENABLE_INVERTER_CONTROL
+        and SOLAR_AUTO_SWITCH_START_TIME >= SOLAR_AUTO_SWITCH_END_TIME
+    ):
         errors.append(
             "SOLAR_AUTO_SWITCH_START_TIME must be earlier than "
             "SOLAR_AUTO_SWITCH_END_TIME"
@@ -436,22 +547,42 @@ def log_startup_configuration() -> None:
     if _startup_configuration_logged:
         return
 
-    grid_outage_explicit_settings = _get_explicit_variables(
-        _GRID_OUTAGE_SETTING_VARIABLES,
-    )
-    solar_explicit_settings = _get_explicit_variables(
-        _SOLAR_SETTING_VARIABLES,
-    )
     summary_lines = [
         "Startup configuration:",
         f"  MySQL port: {_format_setting('MYSQL_PORT')}",
         f"  Inverter serial port: {_format_setting('MUST_PORT')}",
         f"  Data gathering interval: "
         f"{_format_setting('DATA_GATHER_INTERVAL_SECONDS')} seconds",
+        f"  Inverter control: {_format_setting('ENABLE_INVERTER_CONTROL')}",
+    ]
+
+    if not ENABLE_INVERTER_CONTROL:
+        logger.info("Configuration loaded and validated.")
+        logger.info("\n".join(summary_lines))
+
+        for warning_message in _configuration_warnings:
+            if any(
+                variable_name in warning_message
+                for variable_name in _INVERTER_CONTROL_SETTING_VARIABLES
+            ):
+                continue
+
+            logger.warning(warning_message)
+
+        _startup_configuration_logged = True
+        return
+
+    grid_outage_explicit_settings = _get_explicit_variables(
+        _GRID_OUTAGE_SETTING_VARIABLES,
+    )
+    solar_explicit_settings = _get_explicit_variables(
+        _SOLAR_SETTING_VARIABLES,
+    )
+    summary_lines.append(
         f"  Scheduled auto-switch: {_format_setting('ENABLE_AUTO_SWITCH')}; "
         f"target time: {_format_setting('AUTO_SWITCH_TARGET_TIME')}; "
-        f"target mode: {_format_setting('AUTO_SWITCH_TARGET_MODE')}",
-    ]
+        f"target mode: {_format_setting('AUTO_SWITCH_TARGET_MODE')}"
+    )
 
     grid_outage_status = _format_setting(
         "ENABLE_GRID_OUTAGE_AUTO_SWITCH"

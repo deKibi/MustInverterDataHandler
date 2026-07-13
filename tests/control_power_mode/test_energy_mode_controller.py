@@ -28,10 +28,12 @@ def must_data():
 
 def configure_rules(
     monkeypatch,
+    control=True,
     grid_outage=False,
     scheduled=False,
     solar=False,
 ):
+    monkeypatch.setattr(controller, "ENABLE_INVERTER_CONTROL", control)
     monkeypatch.setattr(
         controller,
         "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
@@ -39,6 +41,31 @@ def configure_rules(
     )
     monkeypatch.setattr(controller, "ENABLE_AUTO_SWITCH", scheduled)
     monkeypatch.setattr(controller, "ENABLE_SOLAR_AUTO_SWITCH", solar)
+
+
+def test_master_switch_blocks_all_control_rules(monkeypatch, must_data):
+    configure_rules(
+        monkeypatch,
+        control=False,
+        grid_outage=True,
+        scheduled=True,
+        solar=True,
+    )
+    must_data["GridVoltage"] = 0.0
+    switch_mock = Mock()
+    solar_mock = Mock(return_value=True)
+    monkeypatch.setattr(controller, "switch_energy_mode", switch_mock)
+    monkeypatch.setattr(
+        controller,
+        "should_switch_to_solar_priority",
+        solar_mock,
+    )
+
+    result = controller.handle_energy_mode_control(must_data, [])
+
+    assert result is False
+    switch_mock.assert_not_called()
+    solar_mock.assert_not_called()
 
 
 def test_returns_false_when_all_rules_are_disabled(monkeypatch, must_data):
@@ -335,6 +362,26 @@ def test_failed_command_does_not_start_cooldown(monkeypatch, must_data):
         controller,
         "switch_energy_mode",
         Mock(side_effect=OSError("serial failure")),
+    )
+
+    result = controller.handle_energy_mode_control(must_data, [])
+
+    cooldown_key = (controller.SOLAR_SWITCH_RULE, EnergyMode.SBU)
+    assert result is False
+    assert cooldown_key not in controller._last_command_timestamps
+
+
+def test_guarded_command_does_not_start_cooldown(monkeypatch, must_data):
+    configure_rules(monkeypatch, solar=True)
+    monkeypatch.setattr(
+        controller,
+        "should_switch_to_solar_priority",
+        Mock(return_value=True),
+    )
+    monkeypatch.setattr(
+        controller,
+        "switch_energy_mode",
+        Mock(return_value=False),
     )
 
     result = controller.handle_energy_mode_control(must_data, [])

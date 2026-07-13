@@ -12,6 +12,7 @@ from config import (
     AUTO_SWITCH_TARGET_MODE,
     AUTO_SWITCH_TARGET_TIME,
     ENABLE_GRID_OUTAGE_AUTO_SWITCH,
+    ENABLE_INVERTER_CONTROL,
     GRID_OUTAGE_TARGET_MODE,
     SOLAR_AUTO_SWITCH_END_TIME,
     SOLAR_AUTO_SWITCH_START_TIME,
@@ -54,6 +55,12 @@ def _handle_energy_mode_control(
     must_data: dict[str, Any] | None,
     solar_history: list[dict[str, Any]] | None = None,
 ) -> bool:
+    if not ENABLE_INVERTER_CONTROL:
+        logger.info(
+            "Inverter control is disabled; running in read-only mode."
+        )
+        return False
+
     if (
         not ENABLE_AUTO_SWITCH
         and not ENABLE_GRID_OUTAGE_AUTO_SWITCH
@@ -176,8 +183,12 @@ def _handle_energy_mode_control(
         switch_reason,
     )
 
-    switch_energy_mode(
+    command_response = switch_energy_mode(
         target_mode=target_mode,
     )
+
+    if command_response is False:
+        return False
+
     _last_command_timestamps[cooldown_key] = time.monotonic()
     return True

@@ -3,12 +3,13 @@
 # Standard Libraries
 import logging
 import time
+from typing import Literal
 
-# Third-Party Libraries
+# Third-party Libraries
 import serial
 
 # Custom Modules
-from config import EnergyMode, MUST_PORT
+from config import ENABLE_INVERTER_CONTROL, EnergyMode, MUST_PORT
 from routines import generate_crc
 
 
@@ -79,7 +80,7 @@ def build_energy_mode_command(mode: EnergyMode) -> bytes:
 def switch_energy_mode(
     target_mode: EnergyMode,
     port: str = MUST_PORT,
-) -> bytes:
+) -> bytes | Literal[False]:
     """
     Send an energy mode switch command to the inverter.
 
@@ -88,8 +89,16 @@ def switch_energy_mode(
         port: Serial port used to communicate with the inverter.
 
     Returns:
-        Raw response received from the inverter.
+        Raw response received from the inverter, or False when control is
+        disabled.
     """
+    if not ENABLE_INVERTER_CONTROL:
+        logger.warning(
+            "Inverter control is disabled; mode switch to %s skipped.",
+            target_mode.name,
+        )
+        return False
+
     frame = build_energy_mode_command(target_mode)
 
     logger.info(
