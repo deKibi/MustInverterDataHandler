@@ -20,6 +20,16 @@ REQUIRED_MYSQL_VALUES = {
     "MYSQL_PASSWORD": "fake-secret-password",
 }
 
+OPTIONAL_FEATURE_ENABLE_VARIABLES = {
+    "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
+    "ENABLE_SOLAR_AUTO_SWITCH",
+}
+
+OPTIONAL_FEATURE_SETTING_VARIABLES = {
+    *config._GRID_OUTAGE_SETTING_VARIABLES,
+    *config._SOLAR_SETTING_VARIABLES,
+}
+
 
 @pytest.fixture(autouse=True)
 def isolated_config_state(monkeypatch):
@@ -29,6 +39,8 @@ def isolated_config_state(monkeypatch):
 
     config._configuration_warnings.clear()
     config._defaulted_variables.clear()
+    config._defaulted_variables.update(OPTIONAL_FEATURE_ENABLE_VARIABLES)
+    config._defaulted_variables.update(OPTIONAL_FEATURE_SETTING_VARIABLES)
     config._startup_configuration_logged = False
 
     for variable_name, value in REQUIRED_MYSQL_VALUES.items():
@@ -174,6 +186,27 @@ def test_optional_missing_value_uses_default_and_records_warning(
     )
 
 
+@pytest.mark.parametrize(
+    "variable_name",
+    sorted(OPTIONAL_FEATURE_ENABLE_VARIABLES),
+)
+def test_missing_optional_feature_switch_does_not_record_warning(
+    monkeypatch,
+    variable_name,
+):
+    monkeypatch.delenv(variable_name, raising=False)
+    config._defaulted_variables.discard(variable_name)
+
+    result = config.get_env_bool(variable_name, default=False)
+
+    assert result is False
+    assert variable_name in config._defaulted_variables
+    assert not any(
+        variable_name in warning
+        for warning in config._configuration_warnings
+    )
+
+
 def test_startup_summary_is_safe_complete_and_logged_once(caplog):
     config._record_default("MYSQL_PORT", 3306)
 
@@ -185,15 +218,123 @@ def test_startup_summary_is_safe_complete_and_logged_once(caplog):
     log_text = caplog.text
     assert log_text.count("Configuration loaded and validated.") == 1
     assert log_text.count("Startup configuration:") == 1
-    assert "MySQL host: configured" in log_text
-    assert "MySQL password: configured" in log_text
+    assert "MySQL host:" not in log_text
+    assert "MySQL database:" not in log_text
+    assert "MySQL user:" not in log_text
+    assert "MySQL password:" not in log_text
     assert "MySQL port: not configured (using 3306 default)" in log_text
     assert "Scheduled auto-switch:" in log_text
     assert "Grid outage auto-switch:" in log_text
     assert "Solar auto-switch:" in log_text
-    assert "Solar average thresholds:" in log_text
+    assert "Solar average thresholds:" not in log_text
     assert "fake-secret-password" not in log_text
     assert "fake-db-host" not in log_text
+
+
+def test_missing_optional_feature_switches_are_info_only(
+    monkeypatch,
+    caplog,
+):
+    monkeypatch.setattr(config, "ENABLE_GRID_OUTAGE_AUTO_SWITCH", False)
+    monkeypatch.setattr(config, "ENABLE_SOLAR_AUTO_SWITCH", False)
+
+    with caplog.at_level(logging.INFO, logger="config"):
+        config.log_startup_configuration()
+
+    assert (
+        "Grid outage auto-switch: "
+        "not configured (using false default)"
+    ) in caplog.text
+    assert (
+        "Solar auto-switch: not configured (using false default)"
+    ) in caplog.text
+    assert not any(
+        record.levelno == logging.WARNING
+        and record.getMessage().startswith(
+            tuple(OPTIONAL_FEATURE_ENABLE_VARIABLES)
+        )
+        for record in caplog.records
+    )
+
+
+def test_disabled_features_hide_defaulted_related_settings(
+    monkeypatch,
+    caplog,
+):
+    monkeypatch.setattr(config, "ENABLE_GRID_OUTAGE_AUTO_SWITCH", False)
+    monkeypatch.setattr(config, "ENABLE_SOLAR_AUTO_SWITCH", False)
+
+    for variable_name in OPTIONAL_FEATURE_SETTING_VARIABLES:
+        config._record_default(variable_name, "test-default")
+
+    with caplog.at_level(logging.INFO, logger="config"):
+        config.log_startup_configuration()
+
+    assert "GRID_OUTAGE_TARGET_MODE:" not in caplog.text
+    assert "SOLAR_AUTO_SWITCH_START_TIME:" not in caplog.text
+    assert "Solar history:" not in caplog.text
+    assert "Solar average thresholds:" not in caplog.text
+    assert "Solar latest limits:" not in caplog.text
+    assert "(unused)" not in caplog.text
+    assert not any(
+        record.levelno == logging.WARNING
+        and any(
+            variable_name in record.getMessage()
+            for variable_name in OPTIONAL_FEATURE_SETTING_VARIABLES
+        )
+        for record in caplog.records
+    )
+
+
+def test_disabled_features_report_explicit_settings_as_unused(
+    monkeypatch,
+    caplog,
+):
+    monkeypatch.setattr(config, "ENABLE_GRID_OUTAGE_AUTO_SWITCH", False)
+    monkeypatch.setattr(config, "ENABLE_SOLAR_AUTO_SWITCH", False)
+    explicit_settings = {
+        "GRID_OUTAGE_TARGET_MODE",
+        "SOLAR_AUTO_SWITCH_START_TIME",
+        "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER",
+    }
+    config._defaulted_variables.difference_update(explicit_settings)
+
+    with caplog.at_level(logging.INFO, logger="config"):
+        config.log_startup_configuration()
+
+    assert "GRID_OUTAGE_TARGET_MODE: SUB (unused)" in caplog.text
+    assert "SOLAR_AUTO_SWITCH_START_TIME: 12:00 (unused)" in caplog.text
+    assert "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER: 400.0 (unused)" in caplog.text
+    assert "SOLAR_AUTO_SWITCH_END_TIME:" not in caplog.text
+
+    unused_warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and "configured related settings are unused" in record.getMessage()
+    ]
+    assert len(unused_warnings) == 2
+    assert "GRID_OUTAGE_TARGET_MODE" in unused_warnings[0]
+    assert "SOLAR_AUTO_SWITCH_START_TIME" in unused_warnings[1]
+    assert "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER" in unused_warnings[1]
+    assert "SOLAR_AUTO_SWITCH_END_TIME" not in unused_warnings[1]
+
+
+def test_enabled_features_show_active_settings(monkeypatch, caplog):
+    monkeypatch.setattr(config, "ENABLE_GRID_OUTAGE_AUTO_SWITCH", True)
+    monkeypatch.setattr(config, "ENABLE_SOLAR_AUTO_SWITCH", True)
+
+    with caplog.at_level(logging.INFO, logger="config"):
+        config.log_startup_configuration()
+
+    assert "Grid outage auto-switch:" in caplog.text
+    assert "; target mode:" in caplog.text
+    assert "Solar auto-switch:" in caplog.text
+    assert "; window:" in caplog.text
+    assert "Solar history:" in caplog.text
+    assert "Solar average thresholds:" in caplog.text
+    assert "Solar latest limits:" in caplog.text
+    assert "(unused)" not in caplog.text
 
 
 def test_deferred_default_warning_is_logged_once(caplog):

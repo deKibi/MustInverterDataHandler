@@ -20,6 +20,30 @@ _configuration_warnings: list[str] = []
 _defaulted_variables: set[str] = set()
 _startup_configuration_logged = False
 
+_INFO_ONLY_DEFAULT_VARIABLES: Final[frozenset[str]] = frozenset({
+    "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
+    "ENABLE_SOLAR_AUTO_SWITCH",
+})
+
+_GRID_OUTAGE_SETTING_VARIABLES: Final[tuple[str, ...]] = (
+    "GRID_OUTAGE_TARGET_MODE",
+)
+
+_SOLAR_SETTING_VARIABLES: Final[tuple[str, ...]] = (
+    "SOLAR_AUTO_SWITCH_START_TIME",
+    "SOLAR_AUTO_SWITCH_END_TIME",
+    "SOLAR_AUTO_SWITCH_TARGET_MODE",
+    "SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES",
+    "SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES",
+    "SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES",
+    "SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE",
+    "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER",
+    "SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE",
+    "SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE",
+    "SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER",
+    "SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE",
+)
+
 
 class ConfigurationError(ValueError):
     """Raised when required application configuration is missing."""
@@ -27,6 +51,10 @@ class ConfigurationError(ValueError):
 
 def _record_default(variable_name: str, default: object) -> None:
     _defaulted_variables.add(variable_name)
+
+    if variable_name in _INFO_ONLY_DEFAULT_VARIABLES:
+        return
+
     _configuration_warnings.append(
         f"{variable_name} is not configured; using {default} default."
     )
@@ -408,109 +436,140 @@ def log_startup_configuration() -> None:
     if _startup_configuration_logged:
         return
 
-    logger.info("Configuration loaded and validated.")
-    logger.info(
-        "Startup configuration:\n"
-        "  MySQL host: configured\n"
-        "  MySQL database: configured\n"
-        "  MySQL user: configured\n"
-        "  MySQL password: configured\n"
-        "  MySQL port: %s\n"
-        "  Inverter serial port: %s\n"
-        "  Data gathering interval: %s seconds\n"
-        "  Scheduled auto-switch: %s; target time: %s; target mode: %s\n"
-        "  Grid outage auto-switch: %s; target mode: %s\n"
-        "  Solar auto-switch: %s; window: %s-%s; target mode: %s\n"
-        "  Solar history: %s minutes; minimum samples: %s; "
-        "minimum span: %s minutes\n"
-        "  Solar average thresholds: battery >= %s V; "
-        "load <= %s W; PV >= %s V\n"
-        "  Solar latest limits: battery >= %s V; "
-        "load <= %s W; PV >= %s V.",
-        _format_summary_value("MYSQL_PORT", MYSQL_PORT),
-        _format_summary_value("MUST_PORT", MUST_PORT),
-        _format_summary_value(
-            "DATA_GATHER_INTERVAL_SECONDS",
-            DATA_GATHER_INTERVAL_SECONDS,
-        ),
-        _format_summary_value(
-            "ENABLE_AUTO_SWITCH",
-            _format_bool(ENABLE_AUTO_SWITCH),
-        ),
-        _format_summary_value(
-            "AUTO_SWITCH_TARGET_TIME",
-            AUTO_SWITCH_TARGET_TIME.strftime("%H:%M"),
-        ),
-        _format_summary_value(
-            "AUTO_SWITCH_TARGET_MODE",
-            AUTO_SWITCH_TARGET_MODE.name,
-        ),
-        _format_summary_value(
-            "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
-            _format_bool(ENABLE_GRID_OUTAGE_AUTO_SWITCH),
-        ),
-        _format_summary_value(
-            "GRID_OUTAGE_TARGET_MODE",
-            GRID_OUTAGE_TARGET_MODE.name,
-        ),
-        _format_summary_value(
-            "ENABLE_SOLAR_AUTO_SWITCH",
-            _format_bool(ENABLE_SOLAR_AUTO_SWITCH),
-        ),
-        _format_summary_value(
-            "SOLAR_AUTO_SWITCH_START_TIME",
-            SOLAR_AUTO_SWITCH_START_TIME.strftime("%H:%M"),
-        ),
-        _format_summary_value(
-            "SOLAR_AUTO_SWITCH_END_TIME",
-            SOLAR_AUTO_SWITCH_END_TIME.strftime("%H:%M"),
-        ),
-        _format_summary_value(
-            "SOLAR_AUTO_SWITCH_TARGET_MODE",
-            SOLAR_AUTO_SWITCH_TARGET_MODE.name,
-        ),
-        _format_summary_value(
-            "SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES",
-            SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES,
-        ),
-        _format_summary_value(
-            "SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES",
-            SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES,
-        ),
-        _format_summary_value(
-            "SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES",
-            SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES,
-        ),
-        _format_summary_value(
-            "SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE",
-            SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE,
-        ),
-        _format_summary_value(
-            "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER",
-            SOLAR_AUTO_SWITCH_MAX_LOAD_POWER,
-        ),
-        _format_summary_value(
-            "SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE",
-            SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE,
-        ),
-        _format_summary_value(
-            "SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE",
-            SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE,
-        ),
-        _format_summary_value(
-            "SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER",
-            SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER,
-        ),
-        _format_summary_value(
-            "SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE",
-            SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE,
-        ),
+    grid_outage_explicit_settings = _get_explicit_variables(
+        _GRID_OUTAGE_SETTING_VARIABLES,
     )
+    solar_explicit_settings = _get_explicit_variables(
+        _SOLAR_SETTING_VARIABLES,
+    )
+    summary_lines = [
+        "Startup configuration:",
+        f"  MySQL port: {_format_setting('MYSQL_PORT')}",
+        f"  Inverter serial port: {_format_setting('MUST_PORT')}",
+        f"  Data gathering interval: "
+        f"{_format_setting('DATA_GATHER_INTERVAL_SECONDS')} seconds",
+        f"  Scheduled auto-switch: {_format_setting('ENABLE_AUTO_SWITCH')}; "
+        f"target time: {_format_setting('AUTO_SWITCH_TARGET_TIME')}; "
+        f"target mode: {_format_setting('AUTO_SWITCH_TARGET_MODE')}",
+    ]
+
+    grid_outage_status = _format_setting(
+        "ENABLE_GRID_OUTAGE_AUTO_SWITCH"
+    )
+    if ENABLE_GRID_OUTAGE_AUTO_SWITCH:
+        summary_lines.append(
+            f"  Grid outage auto-switch: {grid_outage_status}; "
+            f"target mode: {_format_setting('GRID_OUTAGE_TARGET_MODE')}"
+        )
+    else:
+        summary_lines.append(f"  Grid outage auto-switch: {grid_outage_status}")
+        if "GRID_OUTAGE_TARGET_MODE" in grid_outage_explicit_settings:
+            summary_lines.append(
+                "  GRID_OUTAGE_TARGET_MODE: "
+                f"{_format_configured_value('GRID_OUTAGE_TARGET_MODE')} "
+                "(unused)"
+            )
+
+    solar_status = _format_setting("ENABLE_SOLAR_AUTO_SWITCH")
+    if ENABLE_SOLAR_AUTO_SWITCH:
+        summary_lines.extend([
+            f"  Solar auto-switch: {solar_status}; window: "
+            f"{_format_setting('SOLAR_AUTO_SWITCH_START_TIME')}-"
+            f"{_format_setting('SOLAR_AUTO_SWITCH_END_TIME')}; "
+            "target mode: "
+            f"{_format_setting('SOLAR_AUTO_SWITCH_TARGET_MODE')}",
+            "  Solar history: "
+            f"{_format_setting('SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES')} "
+            "minutes; minimum samples: "
+            f"{_format_setting('SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES')}; "
+            "minimum span: "
+            f"{_format_setting('SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES')} "
+            "minutes",
+            "  Solar average thresholds: battery >= "
+            f"{_format_setting('SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE')} V; "
+            "load <= "
+            f"{_format_setting('SOLAR_AUTO_SWITCH_MAX_LOAD_POWER')} W; "
+            f"PV >= {_format_setting('SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE')} V",
+            "  Solar latest limits: battery >= "
+            f"{_format_setting('SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE')} "
+            "V; load <= "
+            f"{_format_setting('SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER')} "
+            "W; PV >= "
+            f"{_format_setting('SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE')} V.",
+        ])
+    else:
+        summary_lines.append(f"  Solar auto-switch: {solar_status}")
+        summary_lines.extend(
+            f"  {name}: {_format_configured_value(name)} (unused)"
+            for name in solar_explicit_settings
+        )
+
+    logger.info("Configuration loaded and validated.")
+    logger.info("\n".join(summary_lines))
+
+    suppressed_default_warnings: set[str] = set()
+    if not ENABLE_GRID_OUTAGE_AUTO_SWITCH:
+        suppressed_default_warnings.update(_GRID_OUTAGE_SETTING_VARIABLES)
+    if not ENABLE_SOLAR_AUTO_SWITCH:
+        suppressed_default_warnings.update(_SOLAR_SETTING_VARIABLES)
 
     for warning_message in _configuration_warnings:
+        if any(
+            variable_name in _defaulted_variables
+            and warning_message.startswith(
+                f"{variable_name} is not configured;"
+            )
+            for variable_name in suppressed_default_warnings
+        ):
+            continue
+
         logger.warning(warning_message)
 
+    if not ENABLE_GRID_OUTAGE_AUTO_SWITCH and grid_outage_explicit_settings:
+        logger.warning(
+            "Grid outage auto-switch is disabled; configured related "
+            "settings are unused: %s.",
+            ", ".join(grid_outage_explicit_settings),
+        )
+
+    if not ENABLE_SOLAR_AUTO_SWITCH and solar_explicit_settings:
+        logger.warning(
+            "Solar auto-switch is disabled; configured related settings "
+            "are unused: %s.",
+            ", ".join(solar_explicit_settings),
+        )
+
     _startup_configuration_logged = True
+
+
+def _get_explicit_variables(variable_names: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(
+        variable_name
+        for variable_name in variable_names
+        if variable_name not in _defaulted_variables
+    )
+
+
+def _format_setting(variable_name: str) -> str:
+    return _format_summary_value(
+        variable_name,
+        _format_configured_value(variable_name),
+    )
+
+
+def _format_configured_value(variable_name: str) -> str:
+    value = globals()[variable_name]
+
+    if isinstance(value, bool):
+        return _format_bool(value)
+
+    if isinstance(value, time):
+        return value.strftime("%H:%M")
+
+    if isinstance(value, EnergyMode):
+        return value.name
+
+    return str(value)
 
 
 def _format_summary_value(variable_name: str, value: object) -> str:
