@@ -14,9 +14,10 @@ from config import EnergyMode
 
 
 # Logging
+logger = logging.getLogger(__name__)
 PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parent
 LOG_DIRECTORY: Final[Path] = PROJECT_ROOT / "logs"
-GENERAL_LOG_PATH: Final[Path] = LOG_DIRECTORY / "application.log"
+GENERAL_LOG_PATH: Final[Path] = LOG_DIRECTORY / "app.log"
 INVERTER_DATA_LOG_PATH: Final[Path] = LOG_DIRECTORY / "inverter_data.jsonl"
 GENERAL_LOG_RETENTION_DAYS: Final[int] = 30
 INVERTER_DATA_LOG_RETENTION_DAYS: Final[int] = 14
@@ -39,6 +40,7 @@ def configure_logging() -> None:
     )
 
     console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
     console_handler.setFormatter(general_formatter)
 
     general_file_handler = TimedRotatingFileHandler(
@@ -48,6 +50,7 @@ def configure_logging() -> None:
         encoding="utf-8",
         delay=True,
     )
+    general_file_handler.setLevel(logging.INFO)
     general_file_handler.setFormatter(general_formatter)
 
     root_logger = logging.getLogger()
@@ -69,6 +72,7 @@ def configure_logging() -> None:
     inverter_data_logger.propagate = False
     inverter_data_logger.addHandler(inverter_data_handler)
 
+    logger.setLevel(logging.DEBUG)
     _LOGGING_CONFIGURED = True
 
 
@@ -83,7 +87,8 @@ def log_inverter_data(data: dict[str, object] | None) -> None:
         json.dumps(record, ensure_ascii=False, separators=(",", ":"))
     )
 
-    logging.getLogger(__name__).info(
+    logger.debug("Inverter's data received: %s", data)
+    logger.info(
         "Inverter telemetry received: mode=%s, grid=%s V, "
         "battery=%s V, PV=%s V / %s W, load=%s W.",
         _format_energy_mode(data),
