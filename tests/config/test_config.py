@@ -334,7 +334,7 @@ def test_startup_summary_is_safe_complete_and_logged_once(caplog):
     assert "MySQL database:" not in log_text
     assert "MySQL user:" not in log_text
     assert "MySQL password:" not in log_text
-    assert "MySQL port:" not in log_text
+    assert "MySQL endpoint: fake-db-host:3306" in log_text
     assert "Inverter control: true" in log_text
     assert (
         "Grid voltage states: unavailable < 10 V; available >= 200.0 V"
@@ -345,16 +345,18 @@ def test_startup_summary_is_safe_complete_and_logged_once(caplog):
     assert "Solar auto-switch:" in log_text
     assert "Solar average thresholds:" not in log_text
     assert "fake-secret-password" not in log_text
-    assert "fake-db-host" not in log_text
 
 
-def test_startup_summary_shows_only_custom_mysql_port(monkeypatch, caplog):
+def test_startup_summary_shows_custom_mysql_port_in_endpoint(
+    monkeypatch,
+    caplog,
+):
     monkeypatch.setattr(config, "MYSQL_PORT", 3307)
 
     with caplog.at_level(logging.INFO, logger="config"):
         config.log_startup_configuration()
 
-    assert "MySQL port: 3307" in caplog.text
+    assert "MySQL endpoint: fake-db-host:3307" in caplog.text
 
 
 def test_disabled_master_hides_all_control_configuration(

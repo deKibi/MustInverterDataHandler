@@ -18,12 +18,16 @@ def isolated_logging(monkeypatch, tmp_path):
     data_logger = logging.getLogger(
         logging_config.INVERTER_DATA_LOGGER_NAME
     )
+    mysql_connector_logger = logging.getLogger(
+        logging_config.MYSQL_CONNECTOR_LOGGER_NAME
+    )
     module_logger = logging.getLogger(logging_config.__name__)
     original_root_handlers = list(root_logger.handlers)
     original_data_handlers = list(data_logger.handlers)
     original_root_level = root_logger.level
     original_data_level = data_logger.level
     original_data_propagate = data_logger.propagate
+    original_mysql_connector_level = mysql_connector_logger.level
     original_module_level = module_logger.level
 
     root_logger.handlers.clear()
@@ -51,6 +55,7 @@ def isolated_logging(monkeypatch, tmp_path):
     data_logger.handlers[:] = original_data_handlers
     data_logger.setLevel(original_data_level)
     data_logger.propagate = original_data_propagate
+    mysql_connector_logger.setLevel(original_mysql_connector_level)
     module_logger.setLevel(original_module_level)
 
 
@@ -114,6 +119,35 @@ def test_console_and_general_file_use_separate_log_levels(
     assert general_file_handler.level == logging.INFO
     assert logging.getLogger().level == logging.INFO
     assert logging.getLogger(logging_config.__name__).level == logging.DEBUG
+
+
+def test_mysql_connector_logs_only_warnings_and_errors(
+    isolated_logging,
+    capsys,
+):
+    logging_config.configure_logging()
+    mysql_plugin_logger = logging.getLogger(
+        "mysql.connector.plugins"
+    )
+
+    mysql_plugin_logger.debug("MySQL connector debug message.")
+    mysql_plugin_logger.info("MySQL connector info message.")
+    mysql_plugin_logger.warning("MySQL connector warning message.")
+
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    console_output = capsys.readouterr().err
+    general_log = logging_config.GENERAL_LOG_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    assert "MySQL connector debug message." not in console_output
+    assert "MySQL connector info message." not in console_output
+    assert "MySQL connector warning message." in console_output
+    assert "MySQL connector debug message." not in general_log
+    assert "MySQL connector info message." not in general_log
+    assert "MySQL connector warning message." in general_log
 
 
 def test_disabled_inverter_control_status_is_logged_to_console_only(
