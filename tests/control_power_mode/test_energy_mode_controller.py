@@ -465,7 +465,12 @@ def test_failed_command_does_not_start_cooldown(monkeypatch, must_data):
     assert cooldown_key not in controller._last_command_timestamps
 
 
-def test_guarded_command_does_not_start_cooldown(monkeypatch, must_data):
+@pytest.mark.parametrize("command_response", [False, None, b""])
+def test_empty_command_response_does_not_start_cooldown(
+    monkeypatch,
+    must_data,
+    command_response,
+):
     configure_rules(monkeypatch, solar=True)
     monkeypatch.setattr(
         controller,
@@ -475,7 +480,7 @@ def test_guarded_command_does_not_start_cooldown(monkeypatch, must_data):
     monkeypatch.setattr(
         controller,
         "switch_energy_mode",
-        Mock(return_value=False),
+        Mock(return_value=command_response),
     )
 
     result = controller.handle_energy_mode_control(must_data, [])
@@ -483,3 +488,28 @@ def test_guarded_command_does_not_start_cooldown(monkeypatch, must_data):
     cooldown_key = (controller.SOLAR_SWITCH_RULE, EnergyMode.SBU)
     assert result is False
     assert cooldown_key not in controller._last_command_timestamps
+
+
+def test_non_empty_command_response_starts_cooldown(monkeypatch, must_data):
+    configure_rules(monkeypatch, solar=True)
+    monkeypatch.setattr(
+        controller,
+        "should_switch_to_solar_priority",
+        Mock(return_value=True),
+    )
+    monkeypatch.setattr(
+        controller,
+        "switch_energy_mode",
+        Mock(return_value=b"\x04"),
+    )
+    monkeypatch.setattr(
+        controller.time,
+        "monotonic",
+        Mock(side_effect=[1000.0, 1000.0]),
+    )
+
+    result = controller.handle_energy_mode_control(must_data, [])
+
+    cooldown_key = (controller.SOLAR_SWITCH_RULE, EnergyMode.SBU)
+    assert result is True
+    assert controller._last_command_timestamps[cooldown_key] == 1000.0

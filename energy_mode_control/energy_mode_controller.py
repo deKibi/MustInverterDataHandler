@@ -186,7 +186,7 @@ def _handle_energy_mode_control(
         target_mode=target_mode,
     )
 
-    if command_response is False:
+    if not command_response:
         return False
 
     _last_command_timestamps[cooldown_key] = time.monotonic()

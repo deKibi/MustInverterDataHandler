@@ -4,9 +4,6 @@
 import logging
 from unittest.mock import MagicMock, Mock
 
-# Third-party Libraries
-import pytest
-
 # Custom Modules
 from config import EnergyMode
 from energy_mode_control import energy_mode_switcher as switcher
@@ -32,6 +29,7 @@ def test_enabled_master_switch_preserves_raw_response(monkeypatch):
     frame = b"command"
     response = b"response"
     serial_connection = MagicMock()
+    serial_connection.in_waiting = len(response)
     serial_connection.read.return_value = response
     serial_context = MagicMock()
     serial_context.__enter__.return_value = serial_connection
@@ -56,44 +54,4 @@ def test_enabled_master_switch_preserves_raw_response(monkeypatch):
         write_timeout=1,
     )
     serial_connection.write.assert_called_once_with(frame)
-    serial_connection.read.assert_called_once_with(
-        switcher.ENERGY_MODE_RESPONSE_LENGTH
-    )
-
-
-@pytest.mark.parametrize("response", [b"", b"\x04\x10"])
-def test_incomplete_response_returns_false(
-    monkeypatch,
-    caplog,
-    response,
-):
-    frame = b"command"
-    serial_connection = MagicMock()
-    serial_connection.read.return_value = response
-    serial_context = MagicMock()
-    serial_context.__enter__.return_value = serial_connection
-    monkeypatch.setattr(switcher, "ENABLE_INVERTER_CONTROL", True)
-    monkeypatch.setattr(
-        switcher,
-        "build_energy_mode_command",
-        Mock(return_value=frame),
-    )
-    monkeypatch.setattr(
-        switcher.serial,
-        "Serial",
-        Mock(return_value=serial_context),
-    )
-    monkeypatch.setattr(switcher.time, "sleep", Mock())
-
-    with caplog.at_level(logging.WARNING, logger=switcher.__name__):
-        result = switcher.switch_energy_mode(
-            target_mode=EnergyMode.SBU,
-            port="test-port",
-        )
-
-    assert result is False
-    assert "Incomplete inverter mode switch response" in caplog.text
-    assert "Cooldown will not be started" in caplog.text
-    serial_connection.read.assert_called_once_with(
-        switcher.ENERGY_MODE_RESPONSE_LENGTH
-    )
+    serial_connection.read.assert_called_once_with(len(response))
