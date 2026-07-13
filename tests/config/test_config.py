@@ -34,6 +34,28 @@ OPTIONAL_FEATURE_SETTING_VARIABLES = {
     *config._SOLAR_SETTING_VARIABLES,
 }
 
+CONTROL_SUMMARY_VALUES = (
+    ("ENABLE_AUTO_SWITCH", "true"),
+    ("AUTO_SWITCH_TARGET_TIME", "20:00"),
+    ("AUTO_SWITCH_TARGET_MODE", "SUB"),
+    ("ENABLE_GRID_OUTAGE_AUTO_SWITCH", "true"),
+    ("GRID_AVAILABLE_VOLTAGE_THRESHOLD", "200"),
+    ("GRID_OUTAGE_TARGET_MODE", "SUB"),
+    ("ENABLE_SOLAR_AUTO_SWITCH", "true"),
+    ("SOLAR_AUTO_SWITCH_START_TIME", "12:00"),
+    ("SOLAR_AUTO_SWITCH_END_TIME", "17:00"),
+    ("SOLAR_AUTO_SWITCH_TARGET_MODE", "SBU"),
+    ("SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES", "10"),
+    ("SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES", "8"),
+    ("SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES", "5"),
+    ("SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE", "26.8"),
+    ("SOLAR_AUTO_SWITCH_MAX_LOAD_POWER", "400"),
+    ("SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE", "38.0"),
+    ("SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE", "26.4"),
+    ("SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER", "500"),
+    ("SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE", "35.0"),
+)
+
 
 @pytest.fixture(autouse=True)
 def isolated_config_state(monkeypatch):
@@ -47,9 +69,22 @@ def isolated_config_state(monkeypatch):
     config._defaulted_variables.update(OPTIONAL_FEATURE_SETTING_VARIABLES)
     config._startup_configuration_logged = False
 
+    for variable_name in (
+        "ENABLE_INVERTER_CONTROL",
+        *config._INVERTER_CONTROL_SETTING_VARIABLES,
+    ):
+        monkeypatch.delenv(variable_name, raising=False)
+
     for variable_name, value in REQUIRED_MYSQL_VALUES.items():
         monkeypatch.setattr(config, variable_name, value)
     monkeypatch.setattr(config, "ENABLE_INVERTER_CONTROL", True)
+    monkeypatch.setattr(config, "ENABLE_AUTO_SWITCH", False)
+    monkeypatch.setattr(
+        config,
+        "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
+        False,
+    )
+    monkeypatch.setattr(config, "ENABLE_SOLAR_AUTO_SWITCH", False)
     monkeypatch.setattr(
         config,
         "GRID_AVAILABLE_VOLTAGE_THRESHOLD",
@@ -361,8 +396,20 @@ def test_missing_optional_feature_switch_does_not_record_warning(
     )
 
 
-def test_startup_summary_is_safe_complete_and_logged_once(caplog):
+def test_startup_summary_is_safe_complete_ordered_and_logged_once(
+    monkeypatch,
+    caplog,
+):
     config._record_default("MYSQL_PORT", 3306)
+    monkeypatch.setattr(config, "ENABLE_AUTO_SWITCH", True)
+    monkeypatch.setattr(
+        config,
+        "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
+        True,
+    )
+    monkeypatch.setattr(config, "ENABLE_SOLAR_AUTO_SWITCH", True)
+    for variable_name, value in CONTROL_SUMMARY_VALUES:
+        monkeypatch.setenv(variable_name, value)
 
     with caplog.at_level(logging.INFO, logger="config"):
         config.validate_configuration()
@@ -378,14 +425,18 @@ def test_startup_summary_is_safe_complete_and_logged_once(caplog):
     assert "MySQL password:" not in log_text
     assert "MySQL endpoint: fake-db-host:3306" in log_text
     assert "Inverter control: enabled" in log_text
-    assert (
-        "Grid voltage states: unavailable < 10 V; available >= 200.0 V"
-        in log_text
-    )
-    assert "Scheduled auto-switch:" in log_text
-    assert "Grid outage auto-switch:" in log_text
-    assert "Solar auto-switch:" in log_text
+    expected_control_lines = [
+        f"  {variable_name}: {value}"
+        for variable_name, value in CONTROL_SUMMARY_VALUES
+    ]
+    line_positions = [
+        log_text.index(expected_line)
+        for expected_line in expected_control_lines
+    ]
+    assert line_positions == sorted(line_positions)
+    assert "Grid voltage states:" not in log_text
     assert "Solar average thresholds:" not in log_text
+    assert "(unused)" not in log_text
     assert "fake-secret-password" not in log_text
 
 
@@ -401,25 +452,34 @@ def test_startup_summary_shows_custom_mysql_port_in_endpoint(
     assert "MySQL endpoint: fake-db-host:3307" in caplog.text
 
 
-def test_disabled_master_hides_all_control_configuration(
+def test_disabled_master_shows_all_control_configuration(
     monkeypatch,
     caplog,
 ):
     monkeypatch.setattr(config, "ENABLE_INVERTER_CONTROL", False)
-    config._record_warning(
-        "Invalid value for SOLAR_AUTO_SWITCH_MAX_LOAD_POWER."
-    )
     config._defaulted_variables.discard("ENABLE_INVERTER_CONTROL")
+    monkeypatch.setenv("ENABLE_AUTO_SWITCH", "false")
+    monkeypatch.setenv("AUTO_SWITCH_TARGET_TIME", "20:00")
 
     with caplog.at_level(logging.DEBUG, logger="config"):
         config.log_startup_configuration()
 
     assert "Inverter control: disabled" in caplog.text
     assert "ENABLE_INVERTER_CONTROL is not configured" not in caplog.text
-    assert "Scheduled auto-switch:" not in caplog.text
-    assert "Grid outage auto-switch:" not in caplog.text
-    assert "Solar auto-switch:" not in caplog.text
-    assert "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER" not in caplog.text
+    assert "ENABLE_AUTO_SWITCH: false (unused)" in caplog.text
+    assert "AUTO_SWITCH_TARGET_TIME: 20:00 (unused)" in caplog.text
+    assert "AUTO_SWITCH_TARGET_MODE: not configured" in caplog.text
+    assert "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER: not configured" in caplog.text
+    unused_warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and "configured related settings are unused" in record.getMessage()
+    ]
+    assert len(unused_warnings) == 1
+    assert unused_warnings[0].startswith("Inverter control is disabled;")
+    assert "ENABLE_AUTO_SWITCH" in unused_warnings[0]
+    assert "AUTO_SWITCH_TARGET_TIME" in unused_warnings[0]
 
 
 def test_missing_master_uses_short_info_status_and_debug_details(
@@ -433,6 +493,10 @@ def test_missing_master_uses_short_info_status_and_debug_details(
         config.log_startup_configuration()
 
     assert "Inverter control: disabled" in caplog.text
+    assert "ENABLE_AUTO_SWITCH: not configured" in caplog.text
+    assert "SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE: not configured" in (
+        caplog.text
+    )
     assert (
         "ENABLE_INVERTER_CONTROL is not configured; using false default."
         in caplog.text
@@ -518,13 +582,8 @@ def test_missing_optional_feature_switches_are_info_only(
     with caplog.at_level(logging.INFO, logger="config"):
         config.log_startup_configuration()
 
-    assert (
-        "Grid outage auto-switch: "
-        "not configured (using false default)"
-    ) in caplog.text
-    assert (
-        "Solar auto-switch: not configured (using false default)"
-    ) in caplog.text
+    assert "ENABLE_GRID_OUTAGE_AUTO_SWITCH: not configured" in caplog.text
+    assert "ENABLE_SOLAR_AUTO_SWITCH: not configured" in caplog.text
     assert not any(
         record.levelno == logging.WARNING
         and record.getMessage().startswith(
@@ -534,24 +593,44 @@ def test_missing_optional_feature_switches_are_info_only(
     )
 
 
-def test_disabled_features_hide_defaulted_related_settings(
+@pytest.mark.parametrize("raw_value", [None, "", "   "])
+def test_empty_control_value_is_reported_as_not_configured(
+    monkeypatch,
+    caplog,
+    raw_value,
+):
+    variable_name = "AUTO_SWITCH_TARGET_TIME"
+    if raw_value is None:
+        monkeypatch.delenv(variable_name, raising=False)
+    else:
+        monkeypatch.setenv(variable_name, raw_value)
+
+    with caplog.at_level(logging.INFO, logger="config"):
+        config.log_startup_configuration()
+
+    assert f"{variable_name}: not configured" in caplog.text
+    assert not any(
+        record.levelno == logging.WARNING
+        and variable_name in record.getMessage()
+        for record in caplog.records
+    )
+
+
+def test_disabled_features_show_missing_related_settings(
     monkeypatch,
     caplog,
 ):
     monkeypatch.setattr(config, "ENABLE_GRID_OUTAGE_AUTO_SWITCH", False)
     monkeypatch.setattr(config, "ENABLE_SOLAR_AUTO_SWITCH", False)
 
-    for variable_name in OPTIONAL_FEATURE_SETTING_VARIABLES:
-        config._record_default(variable_name, "test-default")
-
     with caplog.at_level(logging.INFO, logger="config"):
         config.log_startup_configuration()
 
-    assert "GRID_OUTAGE_TARGET_MODE:" not in caplog.text
-    assert "SOLAR_AUTO_SWITCH_START_TIME:" not in caplog.text
-    assert "Solar history:" not in caplog.text
-    assert "Solar average thresholds:" not in caplog.text
-    assert "Solar latest limits:" not in caplog.text
+    assert "GRID_OUTAGE_TARGET_MODE: not configured" in caplog.text
+    assert "SOLAR_AUTO_SWITCH_START_TIME: not configured" in caplog.text
+    assert "SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE: not configured" in (
+        caplog.text
+    )
     assert "(unused)" not in caplog.text
     assert not any(
         record.levelno == logging.WARNING
@@ -569,20 +648,19 @@ def test_disabled_features_report_explicit_settings_as_unused(
 ):
     monkeypatch.setattr(config, "ENABLE_GRID_OUTAGE_AUTO_SWITCH", False)
     monkeypatch.setattr(config, "ENABLE_SOLAR_AUTO_SWITCH", False)
-    explicit_settings = {
-        "GRID_OUTAGE_TARGET_MODE",
-        "SOLAR_AUTO_SWITCH_START_TIME",
-        "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER",
-    }
-    config._defaulted_variables.difference_update(explicit_settings)
+    monkeypatch.setenv("ENABLE_GRID_OUTAGE_AUTO_SWITCH", "false")
+    monkeypatch.setenv("GRID_OUTAGE_TARGET_MODE", "SUB")
+    monkeypatch.setenv("ENABLE_SOLAR_AUTO_SWITCH", "false")
+    monkeypatch.setenv("SOLAR_AUTO_SWITCH_START_TIME", "12:00")
+    monkeypatch.setenv("SOLAR_AUTO_SWITCH_MAX_LOAD_POWER", "400")
 
     with caplog.at_level(logging.INFO, logger="config"):
         config.log_startup_configuration()
 
     assert "GRID_OUTAGE_TARGET_MODE: SUB (unused)" in caplog.text
     assert "SOLAR_AUTO_SWITCH_START_TIME: 12:00 (unused)" in caplog.text
-    assert "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER: 400.0 (unused)" in caplog.text
-    assert "SOLAR_AUTO_SWITCH_END_TIME:" not in caplog.text
+    assert "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER: 400 (unused)" in caplog.text
+    assert "SOLAR_AUTO_SWITCH_END_TIME: not configured" in caplog.text
 
     unused_warnings = [
         record.getMessage()
@@ -595,23 +673,75 @@ def test_disabled_features_report_explicit_settings_as_unused(
     assert "SOLAR_AUTO_SWITCH_START_TIME" in unused_warnings[1]
     assert "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER" in unused_warnings[1]
     assert "SOLAR_AUTO_SWITCH_END_TIME" not in unused_warnings[1]
+    summary_index = next(
+        index
+        for index, record in enumerate(caplog.records)
+        if "Startup configuration:" in record.getMessage()
+    )
+    warning_indexes = [
+        index
+        for index, record in enumerate(caplog.records)
+        if record.levelno == logging.WARNING
+    ]
+    assert all(index > summary_index for index in warning_indexes)
 
 
-def test_enabled_features_show_active_settings(monkeypatch, caplog):
+def test_enabled_features_show_active_raw_settings(monkeypatch, caplog):
+    monkeypatch.setattr(config, "ENABLE_AUTO_SWITCH", True)
     monkeypatch.setattr(config, "ENABLE_GRID_OUTAGE_AUTO_SWITCH", True)
     monkeypatch.setattr(config, "ENABLE_SOLAR_AUTO_SWITCH", True)
+    for variable_name, value in CONTROL_SUMMARY_VALUES:
+        monkeypatch.setenv(variable_name, value)
 
     with caplog.at_level(logging.INFO, logger="config"):
         config.log_startup_configuration()
 
-    assert "Grid outage auto-switch:" in caplog.text
-    assert "; target mode:" in caplog.text
-    assert "Solar auto-switch:" in caplog.text
-    assert "; window:" in caplog.text
-    assert "Solar history:" in caplog.text
-    assert "Solar average thresholds:" in caplog.text
-    assert "Solar latest limits:" in caplog.text
+    assert "ENABLE_AUTO_SWITCH: true" in caplog.text
+    assert "GRID_AVAILABLE_VOLTAGE_THRESHOLD: 200" in caplog.text
+    assert "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER: 400" in caplog.text
     assert "(unused)" not in caplog.text
+
+
+def test_scheduled_slave_settings_are_unused_when_switch_is_disabled(
+    monkeypatch,
+    caplog,
+):
+    monkeypatch.setattr(config, "ENABLE_AUTO_SWITCH", False)
+    monkeypatch.setenv("ENABLE_AUTO_SWITCH", "false")
+    monkeypatch.setenv("AUTO_SWITCH_TARGET_TIME", "20:00")
+    monkeypatch.setenv("AUTO_SWITCH_TARGET_MODE", "SUB")
+
+    with caplog.at_level(logging.INFO, logger="config"):
+        config.log_startup_configuration()
+
+    assert "ENABLE_AUTO_SWITCH: false" in caplog.text
+    assert "AUTO_SWITCH_TARGET_TIME: 20:00 (unused)" in caplog.text
+    assert "AUTO_SWITCH_TARGET_MODE: SUB (unused)" in caplog.text
+    assert (
+        "Scheduled auto-switch is disabled; configured related settings "
+        "are unused: AUTO_SWITCH_TARGET_TIME, AUTO_SWITCH_TARGET_MODE."
+        in caplog.text
+    )
+
+
+def test_grid_threshold_remains_active_when_outage_switch_is_disabled(
+    monkeypatch,
+    caplog,
+):
+    monkeypatch.setattr(config, "ENABLE_GRID_OUTAGE_AUTO_SWITCH", False)
+    monkeypatch.setenv("ENABLE_GRID_OUTAGE_AUTO_SWITCH", "false")
+    monkeypatch.setenv("GRID_AVAILABLE_VOLTAGE_THRESHOLD", "200")
+
+    with caplog.at_level(logging.INFO, logger="config"):
+        config.log_startup_configuration()
+
+    assert "GRID_AVAILABLE_VOLTAGE_THRESHOLD: 200" in caplog.text
+    assert "GRID_AVAILABLE_VOLTAGE_THRESHOLD: 200 (unused)" not in caplog.text
+    assert not any(
+        record.levelno == logging.WARNING
+        and "GRID_AVAILABLE_VOLTAGE_THRESHOLD" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_deferred_default_warning_is_logged_once(caplog):

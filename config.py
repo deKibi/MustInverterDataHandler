@@ -27,14 +27,14 @@ _INFO_ONLY_DEFAULT_VARIABLES: Final[frozenset[str]] = frozenset({
     "MYSQL_PORT",
 })
 
-_SCHEDULED_SETTING_VARIABLES: Final[tuple[str, ...]] = (
-    "ENABLE_AUTO_SWITCH",
+_SCHEDULED_SLAVE_VARIABLES: Final[tuple[str, ...]] = (
     "AUTO_SWITCH_TARGET_TIME",
     "AUTO_SWITCH_TARGET_MODE",
 )
 
-_COMMON_CONTROL_SETTING_VARIABLES: Final[tuple[str, ...]] = (
-    "GRID_AVAILABLE_VOLTAGE_THRESHOLD",
+_SCHEDULED_SETTING_VARIABLES: Final[tuple[str, ...]] = (
+    "ENABLE_AUTO_SWITCH",
+    *_SCHEDULED_SLAVE_VARIABLES,
 )
 
 _GRID_OUTAGE_SETTING_VARIABLES: Final[tuple[str, ...]] = (
@@ -57,9 +57,9 @@ _SOLAR_SETTING_VARIABLES: Final[tuple[str, ...]] = (
 )
 
 _INVERTER_CONTROL_SETTING_VARIABLES: Final[tuple[str, ...]] = (
-    *_COMMON_CONTROL_SETTING_VARIABLES,
     *_SCHEDULED_SETTING_VARIABLES,
     "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
+    "GRID_AVAILABLE_VOLTAGE_THRESHOLD",
     *_GRID_OUTAGE_SETTING_VARIABLES,
     "ENABLE_SOLAR_AUTO_SWITCH",
     *_SOLAR_SETTING_VARIABLES,
@@ -585,105 +585,33 @@ def log_startup_configuration() -> None:
         "  Inverter control: "
         f"{'enabled' if ENABLE_INVERTER_CONTROL else 'disabled'}",
     ]
-
-    if not ENABLE_INVERTER_CONTROL:
-        logger.info("Configuration loaded and validated.")
-        logger.info("\n".join(summary_lines))
-
-        if "ENABLE_INVERTER_CONTROL" in _defaulted_variables:
-            logger.debug(
-                "ENABLE_INVERTER_CONTROL is not configured; "
-                "using false default."
-            )
-
-        for warning_message in _configuration_warnings:
-            if any(
-                variable_name in warning_message
-                for variable_name in _INVERTER_CONTROL_SETTING_VARIABLES
-            ):
-                continue
-
-            logger.warning(warning_message)
-
-        _startup_configuration_logged = True
-        return
-
-    grid_outage_explicit_settings = _get_explicit_variables(
-        _GRID_OUTAGE_SETTING_VARIABLES,
+    summary_lines.extend(
+        f"  {variable_name}: "
+        f"{_format_control_summary_value(variable_name)}"
+        for variable_name in _INVERTER_CONTROL_SETTING_VARIABLES
     )
-    solar_explicit_settings = _get_explicit_variables(
-        _SOLAR_SETTING_VARIABLES,
-    )
-    summary_lines.append(
-        "  Grid voltage states: unavailable < "
-        f"{GRID_OUTAGE_VOLTAGE_THRESHOLD:g} V; available >= "
-        f"{_format_setting('GRID_AVAILABLE_VOLTAGE_THRESHOLD')} V"
-    )
-    summary_lines.append(
-        f"  Scheduled auto-switch: {_format_setting('ENABLE_AUTO_SWITCH')}; "
-        f"target time: {_format_setting('AUTO_SWITCH_TARGET_TIME')}; "
-        f"target mode: {_format_setting('AUTO_SWITCH_TARGET_MODE')}"
-    )
-
-    grid_outage_status = _format_setting(
-        "ENABLE_GRID_OUTAGE_AUTO_SWITCH"
-    )
-    if ENABLE_GRID_OUTAGE_AUTO_SWITCH:
-        summary_lines.append(
-            f"  Grid outage auto-switch: {grid_outage_status}; "
-            f"target mode: {_format_setting('GRID_OUTAGE_TARGET_MODE')}"
-        )
-    else:
-        summary_lines.append(f"  Grid outage auto-switch: {grid_outage_status}")
-        if "GRID_OUTAGE_TARGET_MODE" in grid_outage_explicit_settings:
-            summary_lines.append(
-                "  GRID_OUTAGE_TARGET_MODE: "
-                f"{_format_configured_value('GRID_OUTAGE_TARGET_MODE')} "
-                "(unused)"
-            )
-
-    solar_status = _format_setting("ENABLE_SOLAR_AUTO_SWITCH")
-    if ENABLE_SOLAR_AUTO_SWITCH:
-        summary_lines.extend([
-            f"  Solar auto-switch: {solar_status}; window: "
-            f"{_format_setting('SOLAR_AUTO_SWITCH_START_TIME')}-"
-            f"{_format_setting('SOLAR_AUTO_SWITCH_END_TIME')}; "
-            "target mode: "
-            f"{_format_setting('SOLAR_AUTO_SWITCH_TARGET_MODE')}",
-            "  Solar history: "
-            f"{_format_setting('SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES')} "
-            "minutes; minimum samples: "
-            f"{_format_setting('SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES')}; "
-            "minimum span: "
-            f"{_format_setting('SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES')} "
-            "minutes",
-            "  Solar average thresholds: battery >= "
-            f"{_format_setting('SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE')} V; "
-            "load <= "
-            f"{_format_setting('SOLAR_AUTO_SWITCH_MAX_LOAD_POWER')} W; "
-            f"PV >= {_format_setting('SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE')} V",
-            "  Solar latest limits: battery >= "
-            f"{_format_setting('SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE')} "
-            "V; load <= "
-            f"{_format_setting('SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER')} "
-            "W; PV >= "
-            f"{_format_setting('SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE')} V.",
-        ])
-    else:
-        summary_lines.append(f"  Solar auto-switch: {solar_status}")
-        summary_lines.extend(
-            f"  {name}: {_format_configured_value(name)} (unused)"
-            for name in solar_explicit_settings
-        )
 
     logger.info("Configuration loaded and validated.")
     logger.info("\n".join(summary_lines))
 
+    if "ENABLE_INVERTER_CONTROL" in _defaulted_variables:
+        logger.debug(
+            "ENABLE_INVERTER_CONTROL is not configured; "
+            "using false default."
+        )
+
     suppressed_default_warnings: set[str] = set()
-    if not ENABLE_GRID_OUTAGE_AUTO_SWITCH:
-        suppressed_default_warnings.update(_GRID_OUTAGE_SETTING_VARIABLES)
-    if not ENABLE_SOLAR_AUTO_SWITCH:
-        suppressed_default_warnings.update(_SOLAR_SETTING_VARIABLES)
+    if not ENABLE_INVERTER_CONTROL:
+        suppressed_default_warnings.update(
+            _INVERTER_CONTROL_SETTING_VARIABLES
+        )
+    else:
+        if not ENABLE_AUTO_SWITCH:
+            suppressed_default_warnings.update(_SCHEDULED_SLAVE_VARIABLES)
+        if not ENABLE_GRID_OUTAGE_AUTO_SWITCH:
+            suppressed_default_warnings.update(_GRID_OUTAGE_SETTING_VARIABLES)
+        if not ENABLE_SOLAR_AUTO_SWITCH:
+            suppressed_default_warnings.update(_SOLAR_SETTING_VARIABLES)
 
     for warning_message in _configuration_warnings:
         if any(
@@ -696,6 +624,37 @@ def log_startup_configuration() -> None:
             continue
 
         logger.warning(warning_message)
+
+    if not ENABLE_INVERTER_CONTROL:
+        control_explicit_settings = _get_explicit_environment_variables(
+            _INVERTER_CONTROL_SETTING_VARIABLES,
+        )
+        if control_explicit_settings:
+            logger.warning(
+                "Inverter control is disabled; configured related "
+                "settings are unused: %s.",
+                ", ".join(control_explicit_settings),
+            )
+
+        _startup_configuration_logged = True
+        return
+
+    scheduled_explicit_settings = _get_explicit_environment_variables(
+        _SCHEDULED_SLAVE_VARIABLES,
+    )
+    grid_outage_explicit_settings = _get_explicit_environment_variables(
+        _GRID_OUTAGE_SETTING_VARIABLES,
+    )
+    solar_explicit_settings = _get_explicit_environment_variables(
+        _SOLAR_SETTING_VARIABLES,
+    )
+
+    if not ENABLE_AUTO_SWITCH and scheduled_explicit_settings:
+        logger.warning(
+            "Scheduled auto-switch is disabled; configured related "
+            "settings are unused: %s.",
+            ", ".join(scheduled_explicit_settings),
+        )
 
     if not ENABLE_GRID_OUTAGE_AUTO_SWITCH and grid_outage_explicit_settings:
         logger.warning(
@@ -714,12 +673,51 @@ def log_startup_configuration() -> None:
     _startup_configuration_logged = True
 
 
-def _get_explicit_variables(variable_names: tuple[str, ...]) -> tuple[str, ...]:
+def _get_explicit_environment_variables(
+    variable_names: tuple[str, ...],
+) -> tuple[str, ...]:
     return tuple(
         variable_name
         for variable_name in variable_names
-        if variable_name not in _defaulted_variables
+        if _get_environment_value(variable_name) is not None
     )
+
+
+def _get_environment_value(variable_name: str) -> str | None:
+    value = os.getenv(variable_name)
+
+    if value is None or not value.strip():
+        return None
+
+    return value.strip()
+
+
+def _format_control_summary_value(variable_name: str) -> str:
+    value = _get_environment_value(variable_name)
+
+    if value is None:
+        return "not configured"
+
+    if _is_control_setting_unused(variable_name):
+        return f"{value} (unused)"
+
+    return value
+
+
+def _is_control_setting_unused(variable_name: str) -> bool:
+    if not ENABLE_INVERTER_CONTROL:
+        return True
+
+    if variable_name in _SCHEDULED_SLAVE_VARIABLES:
+        return not ENABLE_AUTO_SWITCH
+
+    if variable_name in _GRID_OUTAGE_SETTING_VARIABLES:
+        return not ENABLE_GRID_OUTAGE_AUTO_SWITCH
+
+    if variable_name in _SOLAR_SETTING_VARIABLES:
+        return not ENABLE_SOLAR_AUTO_SWITCH
+
+    return False
 
 
 def _format_setting(variable_name: str) -> str:

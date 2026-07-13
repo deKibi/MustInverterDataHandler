@@ -167,6 +167,8 @@ def test_defaulted_master_switch_details_are_logged_to_console_only(
     )
     monkeypatch.setattr(config, "_configuration_warnings", [])
     monkeypatch.setattr(config, "_startup_configuration_logged", False)
+    for variable_name in config._INVERTER_CONTROL_SETTING_VARIABLES:
+        monkeypatch.delenv(variable_name, raising=False)
 
     logging_config.configure_logging()
     config.log_startup_configuration()
