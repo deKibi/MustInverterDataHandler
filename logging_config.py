@@ -10,7 +10,16 @@ from typing import Final
 from zoneinfo import ZoneInfo
 
 # Custom Modules
-from config import EnergyMode
+from config import (
+    AUTO_SWITCH_TARGET_MODE,
+    ENABLE_AUTO_SWITCH,
+    ENABLE_GRID_OUTAGE_AUTO_SWITCH,
+    ENABLE_INVERTER_CONTROL,
+    ENABLE_SOLAR_AUTO_SWITCH,
+    GRID_OUTAGE_TARGET_MODE,
+    SOLAR_AUTO_SWITCH_TARGET_MODE,
+    EnergyMode,
+)
 
 
 # Logging
@@ -98,6 +107,48 @@ def log_inverter_data(data: dict[str, object] | None) -> None:
         _format_telemetry_value(data, "ChargerPower"),
         _format_telemetry_value(data, "PLoad"),
     )
+
+
+def log_inverter_control_status() -> None:
+    """Log the current control and switch-rule status to the console."""
+    if not ENABLE_INVERTER_CONTROL:
+        logger.debug(
+            "Inverter control status: disabled (read-only mode)."
+        )
+        return
+
+    logger.debug("Inverter control status: enabled.")
+    _log_switch_rule_status(
+        rule_name="Scheduled auto-switch",
+        enabled=ENABLE_AUTO_SWITCH,
+        target_mode=AUTO_SWITCH_TARGET_MODE,
+    )
+    _log_switch_rule_status(
+        rule_name="Grid outage auto-switch",
+        enabled=ENABLE_GRID_OUTAGE_AUTO_SWITCH,
+        target_mode=GRID_OUTAGE_TARGET_MODE,
+    )
+    _log_switch_rule_status(
+        rule_name="Solar auto-switch",
+        enabled=ENABLE_SOLAR_AUTO_SWITCH,
+        target_mode=SOLAR_AUTO_SWITCH_TARGET_MODE,
+    )
+
+
+def _log_switch_rule_status(
+    rule_name: str,
+    enabled: bool,
+    target_mode: EnergyMode,
+) -> None:
+    if enabled:
+        logger.debug(
+            "%s: enabled; target mode: %s.",
+            rule_name,
+            target_mode.name,
+        )
+        return
+
+    logger.debug("%s: disabled.", rule_name)
 
 
 def _format_energy_mode(data: dict[str, object] | None) -> str:

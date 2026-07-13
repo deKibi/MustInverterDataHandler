@@ -24,6 +24,7 @@ _INFO_ONLY_DEFAULT_VARIABLES: Final[frozenset[str]] = frozenset({
     "ENABLE_INVERTER_CONTROL",
     "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
     "ENABLE_SOLAR_AUTO_SWITCH",
+    "MYSQL_PORT",
 })
 
 _SCHEDULED_SETTING_VARIABLES: Final[tuple[str, ...]] = (
@@ -320,7 +321,8 @@ MYSQL_HOST: Final[str | None] = os.getenv("MYSQL_HOST")
 MYSQL_DATABASE: Final[str | None] = os.getenv("MYSQL_DATABASE")
 MYSQL_USER: Final[str | None] = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD: Final[str | None] = os.getenv("MYSQL_PASSWORD")
-MYSQL_PORT: Final[int] = get_env_port("MYSQL_PORT", 3306)
+MYSQL_DEFAULT_PORT: Final[int] = 3306
+MYSQL_PORT: Final[int] = get_env_port("MYSQL_PORT", MYSQL_DEFAULT_PORT)
 
 MUST_PORT: Final[str] = get_env_string("MUST_PORT", "COM3")
 
@@ -574,14 +576,16 @@ def log_startup_configuration() -> None:
     if _startup_configuration_logged:
         return
 
-    summary_lines = [
-        "Startup configuration:",
-        f"  MySQL port: {_format_setting('MYSQL_PORT')}",
+    summary_lines = ["Startup configuration:"]
+    if MYSQL_PORT != MYSQL_DEFAULT_PORT:
+        summary_lines.append(f"  MySQL port: {MYSQL_PORT}")
+
+    summary_lines.extend([
         f"  Inverter serial port: {_format_setting('MUST_PORT')}",
         f"  Data gathering interval: "
         f"{_format_setting('DATA_GATHER_INTERVAL_SECONDS')} seconds",
         f"  Inverter control: {_format_setting('ENABLE_INVERTER_CONTROL')}",
-    ]
+    ])
 
     if not ENABLE_INVERTER_CONTROL:
         logger.info("Configuration loaded and validated.")

@@ -10,8 +10,6 @@ from dotenv import load_dotenv
 # Custom Modules
 from config import (
     DATA_GATHER_INTERVAL_SECONDS,
-    ENABLE_AUTO_SWITCH,
-    ENABLE_GRID_OUTAGE_AUTO_SWITCH,
     ENABLE_INVERTER_CONTROL,
     ENABLE_SOLAR_AUTO_SWITCH,
     ConfigurationError,
@@ -28,7 +26,11 @@ from config import (
 from energy_mode_control.energy_mode_controller import (
     handle_energy_mode_control,
 )
-from logging_config import configure_logging, log_inverter_data
+from logging_config import (
+    configure_logging,
+    log_inverter_control_status,
+    log_inverter_data,
+)
 from mapper import *
 from mysql_database import MysqlConnectionHandler
 from mysql_database.tables import MustDataTable
@@ -162,14 +164,6 @@ def main():
         "Data gathering interval is set to: %s seconds.",
         DATA_GATHER_INTERVAL_SECONDS,
     )
-    if ENABLE_INVERTER_CONTROL:
-        if ENABLE_AUTO_SWITCH:
-            logger.info("Time-based energy mode auto-switch is enabled.")
-        if ENABLE_GRID_OUTAGE_AUTO_SWITCH:
-            logger.info("Grid outage energy mode auto-switch is enabled.")
-        if ENABLE_SOLAR_AUTO_SWITCH:
-            logger.info("Solar priority energy mode auto-switch is enabled.")
-
     while True:
         # 1. Get data
         must_data = must_inverter_data_handler.get_data()
@@ -179,6 +173,7 @@ def main():
         if must_data and len(must_data) > 2:
             must_data_table.insert_data(data=must_data)
             logger.info("Data inserted into the database.")
+            log_inverter_control_status()
 
             if ENABLE_INVERTER_CONTROL:
                 # 3. Handle optional energy mode control

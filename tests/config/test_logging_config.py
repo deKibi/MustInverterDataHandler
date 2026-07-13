@@ -114,3 +114,84 @@ def test_console_and_general_file_use_separate_log_levels(
     assert general_file_handler.level == logging.INFO
     assert logging.getLogger().level == logging.INFO
     assert logging.getLogger(logging_config.__name__).level == logging.DEBUG
+
+
+def test_disabled_inverter_control_status_is_logged_to_console_only(
+    isolated_logging,
+    monkeypatch,
+    capsys,
+):
+    monkeypatch.setattr(logging_config, "ENABLE_INVERTER_CONTROL", False)
+
+    logging_config.configure_logging()
+    logging_config.logger.info("Test general log entry.")
+    logging_config.log_inverter_control_status()
+
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    console_output = capsys.readouterr().err
+    general_log = logging_config.GENERAL_LOG_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        "Inverter control status: disabled (read-only mode)."
+        in console_output
+    )
+    assert "Scheduled auto-switch:" not in console_output
+    assert "Grid outage auto-switch:" not in console_output
+    assert "Solar auto-switch:" not in console_output
+    assert "Inverter control status:" not in general_log
+
+
+def test_enabled_inverter_control_rule_statuses_are_console_only(
+    isolated_logging,
+    monkeypatch,
+    capsys,
+):
+    monkeypatch.setattr(logging_config, "ENABLE_INVERTER_CONTROL", True)
+    monkeypatch.setattr(logging_config, "ENABLE_AUTO_SWITCH", True)
+    monkeypatch.setattr(
+        logging_config,
+        "AUTO_SWITCH_TARGET_MODE",
+        logging_config.EnergyMode.SUB,
+    )
+    monkeypatch.setattr(
+        logging_config,
+        "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
+        False,
+    )
+    monkeypatch.setattr(logging_config, "ENABLE_SOLAR_AUTO_SWITCH", True)
+    monkeypatch.setattr(
+        logging_config,
+        "SOLAR_AUTO_SWITCH_TARGET_MODE",
+        logging_config.EnergyMode.SBU,
+    )
+
+    logging_config.configure_logging()
+    logging_config.logger.info("Test general log entry.")
+    logging_config.log_inverter_control_status()
+
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    console_output = capsys.readouterr().err
+    general_log = logging_config.GENERAL_LOG_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    assert "Inverter control status: enabled." in console_output
+    assert (
+        "Scheduled auto-switch: enabled; target mode: SUB."
+        in console_output
+    )
+    assert "Grid outage auto-switch: disabled." in console_output
+    assert (
+        "Solar auto-switch: enabled; target mode: SBU."
+        in console_output
+    )
+    assert "Inverter control status:" not in general_log
+    assert "Scheduled auto-switch:" not in general_log
+    assert "Grid outage auto-switch:" not in general_log
+    assert "Solar auto-switch:" not in general_log

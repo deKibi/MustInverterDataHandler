@@ -170,17 +170,34 @@ def test_main_stops_before_hardware_when_configuration_is_invalid(
     inverter_handler_mock.assert_not_called()
 
 
-@pytest.mark.parametrize("raw_value", [None, "", "invalid", "0", "65536"])
-def test_mysql_port_uses_3306_default_for_missing_or_invalid_value(
+@pytest.mark.parametrize("raw_value", [None, ""])
+def test_mysql_port_uses_3306_default_for_missing_value_without_warning(
     monkeypatch,
     raw_value,
 ):
-    variable_name = "TEST_MYSQL_PORT"
+    variable_name = "MYSQL_PORT"
 
     if raw_value is None:
         monkeypatch.delenv(variable_name, raising=False)
     else:
         monkeypatch.setenv(variable_name, raw_value)
+
+    result = config.get_env_port(variable_name, default=3306)
+
+    assert result == 3306
+    assert not any(
+        variable_name in warning
+        for warning in config._configuration_warnings
+    )
+
+
+@pytest.mark.parametrize("raw_value", ["invalid", "0", "65536"])
+def test_mysql_port_uses_3306_default_with_warning_for_invalid_value(
+    monkeypatch,
+    raw_value,
+):
+    variable_name = "MYSQL_PORT"
+    monkeypatch.setenv(variable_name, raw_value)
 
     result = config.get_env_port(variable_name, default=3306)
 
@@ -317,7 +334,7 @@ def test_startup_summary_is_safe_complete_and_logged_once(caplog):
     assert "MySQL database:" not in log_text
     assert "MySQL user:" not in log_text
     assert "MySQL password:" not in log_text
-    assert "MySQL port: not configured (using 3306 default)" in log_text
+    assert "MySQL port:" not in log_text
     assert "Inverter control: true" in log_text
     assert (
         "Grid voltage states: unavailable < 10 V; available >= 200.0 V"
@@ -329,6 +346,15 @@ def test_startup_summary_is_safe_complete_and_logged_once(caplog):
     assert "Solar average thresholds:" not in log_text
     assert "fake-secret-password" not in log_text
     assert "fake-db-host" not in log_text
+
+
+def test_startup_summary_shows_only_custom_mysql_port(monkeypatch, caplog):
+    monkeypatch.setattr(config, "MYSQL_PORT", 3307)
+
+    with caplog.at_level(logging.INFO, logger="config"):
+        config.log_startup_configuration()
+
+    assert "MySQL port: 3307" in caplog.text
 
 
 def test_disabled_master_hides_all_control_configuration(
