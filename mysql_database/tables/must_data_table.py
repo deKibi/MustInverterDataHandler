@@ -151,3 +151,23 @@ class MustDataTable:
             cursor = connection.cursor()
             cursor.execute(sql, values)
             connection.commit()
+
+    def get_recent_solar_switch_data(
+        self,
+        lookback_minutes: int,
+    ) -> list[dict]:
+        """Return recent telemetry fields needed by the solar switch rule."""
+        sql = (
+            f"SELECT timestamp, BatteryVoltage, PLoad, PvVoltage "
+            f"FROM {self._table_name} "
+            f"WHERE timestamp >= DATE_SUB(NOW(), INTERVAL %s MINUTE) "
+            f"ORDER BY timestamp ASC"
+        )
+
+        with self._connection_handler.get_poll_connection() as connection:
+            cursor = connection.cursor(dictionary=True)
+            try:
+                cursor.execute(sql, (lookback_minutes,))
+                return cursor.fetchall()
+            finally:
+                cursor.close()

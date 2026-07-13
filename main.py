@@ -2,7 +2,7 @@
 
 # Standard Libraries
 import logging
-import os
+import time
 from typing import Final, Optional
 
 # Third-party Libraries
@@ -11,14 +11,27 @@ from dotenv import load_dotenv
 # Custom Modules
 from config import (
     DATA_GATHER_INTERVAL_SECONDS,
-    ENABLE_AUTO_SWITCH,
-    ENABLE_GRID_OUTAGE_AUTO_SWITCH,
+    ENABLE_INVERTER_CONTROL,
+    ENABLE_SOLAR_AUTO_SWITCH,
+    ConfigurationError,
     MUST_PORT,
+    MYSQL_DATABASE,
+    MYSQL_HOST,
+    MYSQL_PASSWORD,
+    MYSQL_PORT,
+    MYSQL_USER,
+    SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES,
+    log_startup_configuration,
+    validate_configuration,
 )
 from energy_mode_control.energy_mode_controller import (
     handle_energy_mode_control,
 )
-from logging_config import configure_logging, log_inverter_data
+from logging_config import (
+    configure_logging,
+    log_inverter_control_status,
+    log_inverter_data,
+)
 from mapper import *
 from mysql_database import MysqlConnectionHandler
 from mysql_database.tables import MustDataTable
@@ -26,6 +39,7 @@ from routines import *
 
 
 logger = logging.getLogger(__name__)
+STARTUP_DELAY_SECONDS: Final[int] = 3
 
 
 class MustInverterDataHandler:
@@ -116,10 +130,35 @@ class MustInverterDataHandler:
             logger.exception("Error while getting inverter's data: %s", e)
 
 
+def wait_for_startup() -> bool:
+    """Wait before startup and allow the user to cancel cleanly."""
+    logger.info(
+        "Application starts in %s seconds. Press Ctrl+C to cancel.",
+        STARTUP_DELAY_SECONDS,
+    )
+
+    try:
+        time.sleep(STARTUP_DELAY_SECONDS)
+    except KeyboardInterrupt:
+        logger.info("Application startup cancelled by user.")
+        return False
+
+    return True
+
+
 def main():
     configure_logging()
+    try:
+        validate_configuration()
+    except ConfigurationError as error:
+        logger.critical("Configuration validation failed: %s", error)
+        raise SystemExit(1) from error
+
+    log_startup_configuration()
+    if not wait_for_startup():
+        return
+
     logger.info("Initializing project.")
-    load_dotenv()  # load vars from .env into our environment
 
     # 1. Create instance of class MustInverterDataHandler
     must_inverter_data_handler = MustInverterDataHandler()
@@ -128,10 +167,11 @@ def main():
     logger.info("Connecting to MySQL, it may take some time, please wait...")
     mysql_connection_handler = MysqlConnectionHandler()
     mysql_connection_handler.initialize_connection(
-        db_host=os.getenv("MYSQL_HOST", "localhost"),
-        db_name=os.getenv("MYSQL_DATABASE", "must_data"),
-        db_user=os.getenv("MYSQL_USER", "root"),
-        db_password=os.getenv("MYSQL_PASSWORD", ""),
+        db_host=MYSQL_HOST,
+        db_name=MYSQL_DATABASE,
+        db_user=MYSQL_USER,
+        db_password=MYSQL_PASSWORD,
+        db_port=MYSQL_PORT,
         pool_name="must_python_worker",
         pool_size=2
     )
@@ -145,11 +185,6 @@ def main():
         "Data gathering interval is set to: %s seconds.",
         DATA_GATHER_INTERVAL_SECONDS,
     )
-    if ENABLE_AUTO_SWITCH:
-        logger.info("Time-based energy mode auto-switch is enabled.")
-    if ENABLE_GRID_OUTAGE_AUTO_SWITCH:
-        logger.info("Grid outage energy mode auto-switch is enabled.")
-
     while True:
         # 1. Get data
         must_data = must_inverter_data_handler.get_data()
@@ -159,9 +194,31 @@ def main():
         if must_data and len(must_data) > 2:
             must_data_table.insert_data(data=must_data)
             logger.info("Data inserted into the database.")
+            log_inverter_control_status()
 
-            # 3. Handle optional energy mode control
-            handle_energy_mode_control(must_data=must_data)
+            if ENABLE_INVERTER_CONTROL:
+                # 3. Handle optional energy mode control
+                solar_history = None
+
+                if ENABLE_SOLAR_AUTO_SWITCH:
+                    try:
+                        solar_history = (
+                            must_data_table.get_recent_solar_switch_data(
+                                lookback_minutes=(
+                                    SOLAR_AUTO_SWITCH_LOOKBACK_MINUTES
+                                ),
+                            )
+                        )
+                    except Exception as error:
+                        logger.exception(
+                            "Unable to read solar auto-switch history: %s",
+                            error,
+                        )
+
+                handle_energy_mode_control(
+                    must_data=must_data,
+                    solar_history=solar_history,
+                )
         else:
             logger.warning("Unable to get data from the inverter.")
 

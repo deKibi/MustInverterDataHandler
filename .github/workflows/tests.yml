@@ -1,0 +1,50 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  pytest:
+    name: ${{ matrix.component }}
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: control-power-mode
+            test_path: tests/control_power_mode
+            coverage_args: >-
+              --cov=energy_mode_control.energy_mode_controller
+              --cov=energy_mode_control.solar_auto_switch
+              --cov=energy_mode_control.time_utils
+
+          - component: config
+            test_path: tests/config
+            coverage_args: --cov=config
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Run ${{ matrix.component }} tests
+        run: |
+          python -m pytest "${{ matrix.test_path }}" \
+            ${{ matrix.coverage_args }} \
+            --cov-branch \
+            --cov-report=term-missing
