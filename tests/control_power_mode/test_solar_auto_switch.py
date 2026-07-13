@@ -23,7 +23,7 @@ def valid_samples(current_datetime):
             - timedelta(minutes=5)
             + timedelta(seconds=index * (300 / 7)),
             "BatteryVoltage": 26.8,
-            "PLoad": 700.0,
+            "PLoad": 400.0,
             "PvVoltage": 38.0,
         }
         for index in range(8)
@@ -36,10 +36,10 @@ def solar_settings(monkeypatch):
         "SOLAR_AUTO_SWITCH_MIN_VALID_SAMPLES": 8,
         "SOLAR_AUTO_SWITCH_MIN_SAMPLE_SPAN_MINUTES": 5,
         "SOLAR_AUTO_SWITCH_MIN_BATTERY_VOLTAGE": 26.8,
-        "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER": 700.0,
+        "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER": 400.0,
         "SOLAR_AUTO_SWITCH_MIN_PV_VOLTAGE": 38.0,
         "SOLAR_AUTO_SWITCH_MIN_LATEST_BATTERY_VOLTAGE": 26.4,
-        "SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER": 800.0,
+        "SOLAR_AUTO_SWITCH_MAX_LATEST_LOAD_POWER": 500.0,
         "SOLAR_AUTO_SWITCH_MIN_LATEST_PV_VOLTAGE": 35.0,
     }
 
@@ -101,7 +101,7 @@ def test_respects_active_time_window(
     "field,invalid_value",
     [
         ("BatteryVoltage", 26.7),
-        ("PLoad", 701.0),
+        ("PLoad", 401.0),
         ("PvVoltage", 37.9),
     ],
 )
@@ -121,7 +121,7 @@ def test_rejects_failed_average_condition(
     "field,good_value,invalid_latest_value",
     [
         ("BatteryVoltage", 27.0, 26.3),
-        ("PLoad", 100.0, 801.0),
+        ("PLoad", 100.0, 501.0),
         ("PvVoltage", 39.0, 34.9),
     ],
 )
@@ -151,7 +151,7 @@ def test_rejects_load_spike_hidden_by_good_average(
         sample["PLoad"] for sample in valid_samples
     ) / len(valid_samples)
 
-    assert average_load < 700.0
+    assert average_load < 400.0
     assert evaluate(valid_samples, current_datetime) is False
 
 
@@ -165,7 +165,7 @@ def test_accepts_latest_hard_limit_boundaries(
         sample["PvVoltage"] = 39.0
 
     valid_samples[-1]["BatteryVoltage"] = 26.4
-    valid_samples[-1]["PLoad"] = 800.0
+    valid_samples[-1]["PLoad"] = 500.0
     valid_samples[-1]["PvVoltage"] = 35.0
 
     assert evaluate(valid_samples, current_datetime) is True
@@ -201,7 +201,7 @@ def test_accepts_observed_sub_mode_sunny_conditions(
 ):
     for sample in valid_samples:
         sample["BatteryVoltage"] = 27.1
-        sample["PLoad"] = 595.0
+        sample["PLoad"] = 395.0
         sample["PvVoltage"] = 43.7
         sample["ChargerPower"] = 8.0
 
