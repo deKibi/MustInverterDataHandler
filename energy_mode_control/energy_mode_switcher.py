@@ -3,7 +3,7 @@
 # Standard Libraries
 import logging
 import time
-from typing import Literal
+from typing import Final, Literal
 
 # Third-party Libraries
 import serial
@@ -14,6 +14,9 @@ from routines import generate_crc
 
 
 logger = logging.getLogger(__name__)
+
+
+ENERGY_MODE_RESPONSE_LENGTH: Final[int] = 8
 
 
 def build_energy_mode_command(mode: EnergyMode) -> bytes:
@@ -89,8 +92,8 @@ def switch_energy_mode(
         port: Serial port used to communicate with the inverter.
 
     Returns:
-        Raw response received from the inverter, or False when control is
-        disabled.
+        Raw complete response received from the inverter, or False when
+        control is disabled or the response is incomplete.
     """
     if not ENABLE_INVERTER_CONTROL:
         logger.warning(
@@ -121,11 +124,18 @@ def switch_energy_mode(
         # Give the inverter some time to process the command.
         time.sleep(0.2)
 
-        response = serial_connection.read(
-            serial_connection.in_waiting or 1
-        )
+        response = serial_connection.read(ENERGY_MODE_RESPONSE_LENGTH)
 
     logger.info("Response raw: %r", response)
+
+    if len(response) < ENERGY_MODE_RESPONSE_LENGTH:
+        logger.warning(
+            "Incomplete inverter mode switch response: expected %s bytes, "
+            "received %s. Cooldown will not be started.",
+            ENERGY_MODE_RESPONSE_LENGTH,
+            len(response),
+        )
+        return False
 
     return response
 
