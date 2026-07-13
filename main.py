@@ -2,6 +2,7 @@
 
 # Standard Libraries
 import logging
+import time
 from typing import Final, Optional
 
 # Third-party Libraries
@@ -38,6 +39,7 @@ from routines import *
 
 
 logger = logging.getLogger(__name__)
+STARTUP_DELAY_SECONDS: Final[int] = 3
 
 
 class MustInverterDataHandler:
@@ -128,6 +130,22 @@ class MustInverterDataHandler:
             logger.exception("Error while getting inverter's data: %s", e)
 
 
+def wait_for_startup() -> bool:
+    """Wait before startup and allow the user to cancel cleanly."""
+    logger.info(
+        "Application starts in %s seconds. Press Ctrl+C to cancel.",
+        STARTUP_DELAY_SECONDS,
+    )
+
+    try:
+        time.sleep(STARTUP_DELAY_SECONDS)
+    except KeyboardInterrupt:
+        logger.info("Application startup cancelled by user.")
+        return False
+
+    return True
+
+
 def main():
     configure_logging()
     try:
@@ -137,6 +155,9 @@ def main():
         raise SystemExit(1) from error
 
     log_startup_configuration()
+    if not wait_for_startup():
+        return
+
     logger.info("Initializing project.")
 
     # 1. Create instance of class MustInverterDataHandler

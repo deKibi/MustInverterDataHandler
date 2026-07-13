@@ -9,6 +9,7 @@ from logging.handlers import TimedRotatingFileHandler
 import pytest
 
 # Custom Modules
+import config
 import logging_config
 
 
@@ -18,6 +19,7 @@ def isolated_logging(monkeypatch, tmp_path):
     data_logger = logging.getLogger(
         logging_config.INVERTER_DATA_LOGGER_NAME
     )
+    config_logger = logging.getLogger(logging_config.CONFIG_LOGGER_NAME)
     mysql_connector_logger = logging.getLogger(
         logging_config.MYSQL_CONNECTOR_LOGGER_NAME
     )
@@ -27,6 +29,7 @@ def isolated_logging(monkeypatch, tmp_path):
     original_root_level = root_logger.level
     original_data_level = data_logger.level
     original_data_propagate = data_logger.propagate
+    original_config_level = config_logger.level
     original_mysql_connector_level = mysql_connector_logger.level
     original_module_level = module_logger.level
 
@@ -55,6 +58,7 @@ def isolated_logging(monkeypatch, tmp_path):
     data_logger.handlers[:] = original_data_handlers
     data_logger.setLevel(original_data_level)
     data_logger.propagate = original_data_propagate
+    config_logger.setLevel(original_config_level)
     mysql_connector_logger.setLevel(original_mysql_connector_level)
     module_logger.setLevel(original_module_level)
 
@@ -148,6 +152,40 @@ def test_mysql_connector_logs_only_warnings_and_errors(
     assert "MySQL connector debug message." not in general_log
     assert "MySQL connector info message." not in general_log
     assert "MySQL connector warning message." in general_log
+
+
+def test_defaulted_master_switch_details_are_logged_to_console_only(
+    isolated_logging,
+    monkeypatch,
+    capsys,
+):
+    monkeypatch.setattr(config, "ENABLE_INVERTER_CONTROL", False)
+    monkeypatch.setattr(
+        config,
+        "_defaulted_variables",
+        {"ENABLE_INVERTER_CONTROL"},
+    )
+    monkeypatch.setattr(config, "_configuration_warnings", [])
+    monkeypatch.setattr(config, "_startup_configuration_logged", False)
+
+    logging_config.configure_logging()
+    config.log_startup_configuration()
+
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    console_output = capsys.readouterr().err
+    general_log = logging_config.GENERAL_LOG_PATH.read_text(
+        encoding="utf-8"
+    )
+    default_message = (
+        "ENABLE_INVERTER_CONTROL is not configured; using false default."
+    )
+
+    assert "Inverter control: disabled" in console_output
+    assert "Inverter control: disabled" in general_log
+    assert default_message in console_output
+    assert default_message not in general_log
 
 
 def test_disabled_inverter_control_status_is_logged_to_console_only(

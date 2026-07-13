@@ -170,6 +170,48 @@ def test_main_stops_before_hardware_when_configuration_is_invalid(
     inverter_handler_mock.assert_not_called()
 
 
+def test_startup_waits_three_seconds(monkeypatch, caplog):
+    sleep_mock = Mock()
+    monkeypatch.setattr(application.time, "sleep", sleep_mock)
+
+    with caplog.at_level(logging.INFO, logger="main"):
+        result = application.wait_for_startup()
+
+    assert result is True
+    sleep_mock.assert_called_once_with(3)
+    assert (
+        "Application starts in 3 seconds. Press Ctrl+C to cancel."
+        in caplog.text
+    )
+
+
+def test_startup_interrupt_is_handled_without_hardware_initialization(
+    monkeypatch,
+    caplog,
+):
+    inverter_handler_mock = Mock()
+    monkeypatch.setattr(application, "configure_logging", Mock())
+    monkeypatch.setattr(application, "validate_configuration", Mock())
+    monkeypatch.setattr(application, "log_startup_configuration", Mock())
+    monkeypatch.setattr(
+        application.time,
+        "sleep",
+        Mock(side_effect=KeyboardInterrupt),
+    )
+    monkeypatch.setattr(
+        application,
+        "MustInverterDataHandler",
+        inverter_handler_mock,
+    )
+
+    with caplog.at_level(logging.INFO, logger="main"):
+        result = application.main()
+
+    assert result is None
+    assert "Application startup cancelled by user." in caplog.text
+    inverter_handler_mock.assert_not_called()
+
+
 @pytest.mark.parametrize("raw_value", [None, ""])
 def test_mysql_port_uses_3306_default_for_missing_value_without_warning(
     monkeypatch,
@@ -335,7 +377,7 @@ def test_startup_summary_is_safe_complete_and_logged_once(caplog):
     assert "MySQL user:" not in log_text
     assert "MySQL password:" not in log_text
     assert "MySQL endpoint: fake-db-host:3306" in log_text
-    assert "Inverter control: true" in log_text
+    assert "Inverter control: enabled" in log_text
     assert (
         "Grid voltage states: unavailable < 10 V; available >= 200.0 V"
         in log_text
@@ -369,29 +411,37 @@ def test_disabled_master_hides_all_control_configuration(
     )
     config._defaulted_variables.discard("ENABLE_INVERTER_CONTROL")
 
-    with caplog.at_level(logging.INFO, logger="config"):
+    with caplog.at_level(logging.DEBUG, logger="config"):
         config.log_startup_configuration()
 
-    assert "Inverter control: false" in caplog.text
+    assert "Inverter control: disabled" in caplog.text
+    assert "ENABLE_INVERTER_CONTROL is not configured" not in caplog.text
     assert "Scheduled auto-switch:" not in caplog.text
     assert "Grid outage auto-switch:" not in caplog.text
     assert "Solar auto-switch:" not in caplog.text
     assert "SOLAR_AUTO_SWITCH_MAX_LOAD_POWER" not in caplog.text
 
 
-def test_missing_master_is_reported_as_info_without_warning(
+def test_missing_master_uses_short_info_status_and_debug_details(
     monkeypatch,
     caplog,
 ):
     monkeypatch.setattr(config, "ENABLE_INVERTER_CONTROL", False)
     config._record_default("ENABLE_INVERTER_CONTROL", "false")
 
-    with caplog.at_level(logging.INFO, logger="config"):
+    with caplog.at_level(logging.DEBUG, logger="config"):
         config.log_startup_configuration()
 
+    assert "Inverter control: disabled" in caplog.text
     assert (
-        "Inverter control: not configured (using false default)"
+        "ENABLE_INVERTER_CONTROL is not configured; using false default."
         in caplog.text
+    )
+    assert any(
+        record.levelno == logging.DEBUG
+        and "ENABLE_INVERTER_CONTROL is not configured"
+        in record.getMessage()
+        for record in caplog.records
     )
     assert not any(
         record.levelno == logging.WARNING

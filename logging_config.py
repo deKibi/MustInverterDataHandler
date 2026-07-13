@@ -30,6 +30,7 @@ GENERAL_LOG_PATH: Final[Path] = LOG_DIRECTORY / "app.log"
 INVERTER_DATA_LOG_PATH: Final[Path] = LOG_DIRECTORY / "inverter_data.jsonl"
 GENERAL_LOG_RETENTION_DAYS: Final[int] = 30
 INVERTER_DATA_LOG_RETENTION_DAYS: Final[int] = 14
+CONFIG_LOGGER_NAME: Final[str] = "config"
 INVERTER_DATA_LOGGER_NAME: Final[str] = "inverter_data"
 MYSQL_CONNECTOR_LOGGER_NAME: Final[str] = "mysql.connector"
 KYIV_TIMEZONE: Final[ZoneInfo] = ZoneInfo("Europe/Kyiv")
@@ -67,6 +68,9 @@ def configure_logging() -> None:
     root_logger.setLevel(logging.INFO)
     root_logger.addHandler(console_handler)
     root_logger.addHandler(general_file_handler)
+
+    config_logger = logging.getLogger(CONFIG_LOGGER_NAME)
+    config_logger.setLevel(logging.DEBUG)
 
     mysql_connector_logger = logging.getLogger(MYSQL_CONNECTOR_LOGGER_NAME)
     mysql_connector_logger.setLevel(logging.WARNING)

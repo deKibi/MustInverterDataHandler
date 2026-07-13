@@ -582,12 +582,19 @@ def log_startup_configuration() -> None:
         f"  Inverter serial port: {_format_setting('MUST_PORT')}",
         f"  Data gathering interval: "
         f"{_format_setting('DATA_GATHER_INTERVAL_SECONDS')} seconds",
-        f"  Inverter control: {_format_setting('ENABLE_INVERTER_CONTROL')}",
+        "  Inverter control: "
+        f"{'enabled' if ENABLE_INVERTER_CONTROL else 'disabled'}",
     ]
 
     if not ENABLE_INVERTER_CONTROL:
         logger.info("Configuration loaded and validated.")
         logger.info("\n".join(summary_lines))
+
+        if "ENABLE_INVERTER_CONTROL" in _defaulted_variables:
+            logger.debug(
+                "ENABLE_INVERTER_CONTROL is not configured; "
+                "using false default."
+            )
 
         for warning_message in _configuration_warnings:
             if any(
