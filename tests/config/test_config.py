@@ -50,6 +50,11 @@ def isolated_config_state(monkeypatch):
     for variable_name, value in REQUIRED_MYSQL_VALUES.items():
         monkeypatch.setattr(config, variable_name, value)
     monkeypatch.setattr(config, "ENABLE_INVERTER_CONTROL", True)
+    monkeypatch.setattr(
+        config,
+        "GRID_AVAILABLE_VOLTAGE_THRESHOLD",
+        200.0,
+    )
 
     yield
 
@@ -61,6 +66,51 @@ def isolated_config_state(monkeypatch):
 
 def test_valid_required_mysql_configuration_passes():
     config.validate_configuration()
+
+
+def test_grid_available_voltage_threshold_uses_200_default(monkeypatch):
+    variable_name = "TEST_GRID_AVAILABLE_VOLTAGE_THRESHOLD"
+    monkeypatch.delenv(variable_name, raising=False)
+
+    result = config.get_env_float(
+        variable_name=variable_name,
+        default=200.0,
+        min_value=0.0,
+    )
+
+    assert result == 200.0
+
+
+def test_grid_available_voltage_threshold_accepts_explicit_value(
+    monkeypatch,
+):
+    variable_name = "TEST_GRID_AVAILABLE_VOLTAGE_THRESHOLD"
+    monkeypatch.setenv(variable_name, "210.5")
+
+    result = config.get_env_float(
+        variable_name=variable_name,
+        default=200.0,
+        min_value=0.0,
+    )
+
+    assert result == 210.5
+
+
+@pytest.mark.parametrize("threshold", [0.0, 9.99, 10.0])
+def test_rejects_available_threshold_at_or_below_outage_threshold(
+    monkeypatch,
+    threshold,
+):
+    monkeypatch.setattr(
+        config,
+        "GRID_AVAILABLE_VOLTAGE_THRESHOLD",
+        threshold,
+    )
+
+    with pytest.raises(config.ConfigurationError) as error_info:
+        config.validate_configuration()
+
+    assert "GRID_AVAILABLE_VOLTAGE_THRESHOLD" in str(error_info.value)
 
 
 @pytest.mark.parametrize(
@@ -269,6 +319,10 @@ def test_startup_summary_is_safe_complete_and_logged_once(caplog):
     assert "MySQL password:" not in log_text
     assert "MySQL port: not configured (using 3306 default)" in log_text
     assert "Inverter control: true" in log_text
+    assert (
+        "Grid voltage states: unavailable < 10 V; available >= 200.0 V"
+        in log_text
+    )
     assert "Scheduled auto-switch:" in log_text
     assert "Grid outage auto-switch:" in log_text
     assert "Solar auto-switch:" in log_text
@@ -318,8 +372,13 @@ def test_missing_master_is_reported_as_info_without_warning(
     )
 
 
-def test_disabled_master_skips_solar_window_validation(monkeypatch):
+def test_disabled_master_skips_control_validation(monkeypatch):
     monkeypatch.setattr(config, "ENABLE_INVERTER_CONTROL", False)
+    monkeypatch.setattr(
+        config,
+        "GRID_AVAILABLE_VOLTAGE_THRESHOLD",
+        5.0,
+    )
     monkeypatch.setattr(
         config,
         "SOLAR_AUTO_SWITCH_START_TIME",
@@ -348,6 +407,7 @@ def test_disabled_master_ignores_invalid_control_environment(tmp_path):
         "MUST_PORT": "test-port",
         "DATA_GATHER_INTERVAL_SECONDS": "60",
         "ENABLE_INVERTER_CONTROL": "false",
+        "GRID_AVAILABLE_VOLTAGE_THRESHOLD": "invalid",
         "AUTO_SWITCH_TARGET_TIME": "invalid",
         "GRID_OUTAGE_TARGET_MODE": "invalid",
         "SOLAR_AUTO_SWITCH_START_TIME": "invalid",

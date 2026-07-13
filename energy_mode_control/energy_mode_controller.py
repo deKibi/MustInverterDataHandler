@@ -13,7 +13,9 @@ from config import (
     AUTO_SWITCH_TARGET_TIME,
     ENABLE_GRID_OUTAGE_AUTO_SWITCH,
     ENABLE_INVERTER_CONTROL,
+    GRID_AVAILABLE_VOLTAGE_THRESHOLD,
     GRID_OUTAGE_TARGET_MODE,
+    GRID_OUTAGE_VOLTAGE_THRESHOLD,
     SOLAR_AUTO_SWITCH_END_TIME,
     SOLAR_AUTO_SWITCH_START_TIME,
     SOLAR_AUTO_SWITCH_TARGET_MODE,
@@ -28,8 +30,6 @@ from energy_mode_control.energy_mode_switcher import (
 )
 
 
-# Grid availability
-GRID_OUTAGE_VOLTAGE_THRESHOLD: Final[float] = 10.0
 ENERGY_MODE_COMMAND_COOLDOWN_SECONDS: Final[int] = 300
 GRID_OUTAGE_SWITCH_RULE: Final[str] = "grid_outage"
 SCHEDULED_SWITCH_RULE: Final[str] = "scheduled"
@@ -104,9 +104,8 @@ def _handle_energy_mode_control(
         )
         return False
 
-    is_grid_available = (
-        grid_voltage >= GRID_OUTAGE_VOLTAGE_THRESHOLD
-    )
+    is_grid_unavailable = grid_voltage < GRID_OUTAGE_VOLTAGE_THRESHOLD
+    is_grid_available = grid_voltage >= GRID_AVAILABLE_VOLTAGE_THRESHOLD
 
     target_mode: EnergyMode | None = None
     switch_reason: str | None = None
@@ -115,7 +114,7 @@ def _handle_energy_mode_control(
     # Grid outage rule has the highest priority.
     if (
             ENABLE_GRID_OUTAGE_AUTO_SWITCH
-            and not is_grid_available
+            and is_grid_unavailable
     ):
         target_mode = GRID_OUTAGE_TARGET_MODE
         switch_reason = "electrical grid is unavailable"

@@ -36,6 +36,16 @@ def configure_rules(
     monkeypatch.setattr(controller, "ENABLE_INVERTER_CONTROL", control)
     monkeypatch.setattr(
         controller,
+        "GRID_AVAILABLE_VOLTAGE_THRESHOLD",
+        200.0,
+    )
+    monkeypatch.setattr(
+        controller,
+        "GRID_OUTAGE_VOLTAGE_THRESHOLD",
+        10.0,
+    )
+    monkeypatch.setattr(
+        controller,
         "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
         grid_outage,
     )
@@ -149,6 +159,90 @@ def test_grid_outage_rule_has_highest_priority(monkeypatch, must_data):
     assert result is True
     switch_mock.assert_called_once_with(target_mode=EnergyMode.UTI)
     solar_mock.assert_not_called()
+
+
+def test_grid_voltage_below_outage_boundary_triggers_outage_rule(
+    monkeypatch,
+    must_data,
+):
+    configure_rules(monkeypatch, grid_outage=True)
+    must_data["GridVoltage"] = 9.99
+    switch_mock = Mock()
+    monkeypatch.setattr(controller, "GRID_OUTAGE_TARGET_MODE", EnergyMode.UTI)
+    monkeypatch.setattr(controller, "switch_energy_mode", switch_mock)
+
+    result = controller.handle_energy_mode_control(must_data)
+
+    assert result is True
+    switch_mock.assert_called_once_with(target_mode=EnergyMode.UTI)
+
+
+@pytest.mark.parametrize("grid_voltage", [10.0, 11.0, 190.0, 199.99])
+def test_uncertain_grid_voltage_blocks_all_control_rules(
+    monkeypatch,
+    must_data,
+    grid_voltage,
+):
+    configure_rules(
+        monkeypatch,
+        grid_outage=True,
+        scheduled=True,
+        solar=True,
+    )
+    must_data["GridVoltage"] = grid_voltage
+    time_reached_mock = Mock(return_value=True)
+    solar_mock = Mock(return_value=True)
+    switch_mock = Mock()
+    monkeypatch.setattr(controller, "is_time_reached", time_reached_mock)
+    monkeypatch.setattr(
+        controller,
+        "should_switch_to_solar_priority",
+        solar_mock,
+    )
+    monkeypatch.setattr(controller, "switch_energy_mode", switch_mock)
+
+    result = controller.handle_energy_mode_control(must_data, [])
+
+    assert result is False
+    time_reached_mock.assert_not_called()
+    solar_mock.assert_not_called()
+    switch_mock.assert_not_called()
+
+
+def test_available_grid_boundary_allows_scheduled_rule(
+    monkeypatch,
+    must_data,
+):
+    configure_rules(monkeypatch, scheduled=True)
+    must_data["GridVoltage"] = 200.0
+    switch_mock = Mock()
+    monkeypatch.setattr(controller, "AUTO_SWITCH_TARGET_MODE", EnergyMode.UTI)
+    monkeypatch.setattr(controller, "is_time_reached", Mock(return_value=True))
+    monkeypatch.setattr(controller, "switch_energy_mode", switch_mock)
+
+    result = controller.handle_energy_mode_control(must_data)
+
+    assert result is True
+    switch_mock.assert_called_once_with(target_mode=EnergyMode.UTI)
+
+
+def test_available_grid_boundary_allows_solar_evaluation(
+    monkeypatch,
+    must_data,
+):
+    configure_rules(monkeypatch, solar=True)
+    must_data["GridVoltage"] = 200.0
+    solar_mock = Mock(return_value=False)
+    monkeypatch.setattr(
+        controller,
+        "should_switch_to_solar_priority",
+        solar_mock,
+    )
+
+    result = controller.handle_energy_mode_control(must_data, [])
+
+    assert result is False
+    solar_mock.assert_called_once_with([])
 
 
 def test_scheduled_rule_has_priority_over_solar(monkeypatch, must_data):

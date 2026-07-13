@@ -32,6 +32,10 @@ _SCHEDULED_SETTING_VARIABLES: Final[tuple[str, ...]] = (
     "AUTO_SWITCH_TARGET_MODE",
 )
 
+_COMMON_CONTROL_SETTING_VARIABLES: Final[tuple[str, ...]] = (
+    "GRID_AVAILABLE_VOLTAGE_THRESHOLD",
+)
+
 _GRID_OUTAGE_SETTING_VARIABLES: Final[tuple[str, ...]] = (
     "GRID_OUTAGE_TARGET_MODE",
 )
@@ -52,6 +56,7 @@ _SOLAR_SETTING_VARIABLES: Final[tuple[str, ...]] = (
 )
 
 _INVERTER_CONTROL_SETTING_VARIABLES: Final[tuple[str, ...]] = (
+    *_COMMON_CONTROL_SETTING_VARIABLES,
     *_SCHEDULED_SETTING_VARIABLES,
     "ENABLE_GRID_OUTAGE_AUTO_SWITCH",
     *_GRID_OUTAGE_SETTING_VARIABLES,
@@ -330,6 +335,18 @@ ENABLE_INVERTER_CONTROL: Final[bool] = get_env_inverter_control(
     variable_name="ENABLE_INVERTER_CONTROL",
 )
 
+GRID_OUTAGE_VOLTAGE_THRESHOLD: Final[float] = 10.0
+
+GRID_AVAILABLE_VOLTAGE_THRESHOLD: Final[float] = (
+    get_env_float(
+        variable_name="GRID_AVAILABLE_VOLTAGE_THRESHOLD",
+        default=200.0,
+        min_value=0.0,
+    )
+    if ENABLE_INVERTER_CONTROL
+    else 200.0
+)
+
 ENABLE_AUTO_SWITCH: Final[bool] = (
     get_env_bool(
         variable_name="ENABLE_AUTO_SWITCH",
@@ -536,6 +553,16 @@ def validate_configuration() -> None:
             "SOLAR_AUTO_SWITCH_END_TIME"
         )
 
+    if (
+        ENABLE_INVERTER_CONTROL
+        and GRID_AVAILABLE_VOLTAGE_THRESHOLD
+        <= GRID_OUTAGE_VOLTAGE_THRESHOLD
+    ):
+        errors.append(
+            "GRID_AVAILABLE_VOLTAGE_THRESHOLD must be greater than "
+            "GRID_OUTAGE_VOLTAGE_THRESHOLD"
+        )
+
     if errors:
         raise ConfigurationError("; ".join(errors))
 
@@ -577,6 +604,11 @@ def log_startup_configuration() -> None:
     )
     solar_explicit_settings = _get_explicit_variables(
         _SOLAR_SETTING_VARIABLES,
+    )
+    summary_lines.append(
+        "  Grid voltage states: unavailable < "
+        f"{GRID_OUTAGE_VOLTAGE_THRESHOLD:g} V; available >= "
+        f"{_format_setting('GRID_AVAILABLE_VOLTAGE_THRESHOLD')} V"
     )
     summary_lines.append(
         f"  Scheduled auto-switch: {_format_setting('ENABLE_AUTO_SWITCH')}; "
